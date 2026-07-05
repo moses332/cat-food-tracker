@@ -22,49 +22,13 @@
   </header>
 
   <main>
-    <!-- LOG tab -->
-    <section class="tab" id="tab-log" data-tab="log">
-      <form id="entryForm" class="card">
-        <h2>Log a feeding</h2>
-
-        <label class="field">
-          <span>Food</span>
-          <button type="button" id="scanBtn" class="scan-btn">📷 Scan a can</button>
-          <div class="food-row">
-            <select id="foodSelect" required></select>
-            <button type="button" id="addFoodBtn" class="ghost-btn" title="Add a custom food">+ New</button>
-          </div>
-        </label>
-
-        <fieldset class="field">
-          <legend>Initial reaction <small>(first bites)</small></legend>
-          <div class="reaction-grid" id="initialReactions"></div>
-        </fieldset>
-
-        <fieldset class="field">
-          <legend>Long-term reaction <small>(did she keep eating / come back?)</small></legend>
-          <div class="reaction-grid" id="longtermReactions"></div>
-        </fieldset>
-
-        <label class="field">
-          <span>Time fed</span>
-          <input type="datetime-local" id="fedAt" required />
-        </label>
-
-        <label class="field">
-          <span>Notes <small>(optional)</small></span>
-          <textarea id="notes" rows="2" placeholder="e.g. ate around the gravy, only the chunks…"></textarea>
-        </label>
-
-        <button type="submit" class="primary-btn">Save feeding</button>
-        <p class="form-msg" id="entryMsg" hidden></p>
-      </form>
-    </section>
-
-    <!-- HISTORY tab -->
-    <section class="tab" id="tab-history" data-tab="history" hidden>
+    <!-- HISTORY tab (default) -->
+    <section class="tab" id="tab-history" data-tab="history">
       <div class="card">
-        <h2>History</h2>
+        <div class="history-head">
+          <h2>History</h2>
+          <button type="button" id="newEntryBtn" class="primary-btn compact">＋ New feeding</button>
+        </div>
         <div id="historyList" class="history-list"></div>
       </div>
     </section>
@@ -82,7 +46,7 @@
       </div>
       <div class="card">
         <h2>Food leaderboard</h2>
-        <p class="muted">Ranked by her average initial reaction. Watch the <strong>drift</strong> column — that's foods she loves at first but cools on.</p>
+        <p class="muted">Her foods ranked by average rating — best-liked at the top.</p>
         <div id="leaderboard"></div>
       </div>
     </section>
@@ -107,13 +71,18 @@
   </main>
 
   <nav class="tab-bar">
-    <button class="tab-btn active" data-go="log"><span>📝</span>Log</button>
-    <button class="tab-btn" data-go="history"><span>📜</span>History</button>
+    <button class="tab-btn active" data-go="history"><span>📜</span>History</button>
     <button class="tab-btn" data-go="insights"><span>📊</span>Insights</button>
     <button class="tab-btn" data-go="pets"><span>🐾</span>Pets</button>
   </nav>
 
-  <!-- Generic modal host -->
+  <!-- New-feeding form lives in its own modal layer (below the utility modal,
+       so Scan / Add-food can stack on top of it) -->
+  <div class="modal-backdrop" id="entryBackdrop" hidden>
+    <div class="modal card" id="entryBox"></div>
+  </div>
+
+  <!-- Generic utility modal host (scan, add food, edit, pets) -->
   <div class="modal-backdrop" id="modalBackdrop" hidden>
     <div class="modal card" id="modalBox"></div>
   </div>

@@ -268,7 +268,7 @@ code {
 /* ── Leaderboard ── */
 .lb-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 8px 12px;
   align-items: center;
   padding: 10px 0;
@@ -278,10 +278,8 @@ code {
 .lb-row:last-child { border-bottom: none; }
 .lb-row .lb-name { font-weight: 600; }
 .lb-row .lb-sub { font-size: 12px; color: var(--muted); }
-.lb-stat { text-align: right; font-variant-numeric: tabular-nums; }
-.drift-up { color: var(--good); font-weight: 700; }
-.drift-down { color: var(--bad); font-weight: 700; }
-.drift-flat { color: var(--muted); }
+.lb-stat { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; }
+.lb-stat .lb-unit { color: var(--muted); font-weight: 400; font-size: 12px; }
 
 /* ── Pets ── */
 .pet-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
@@ -340,3 +338,56 @@ code {
 .modal h2 { margin-top: 0; }
 .modal .btn-row { margin-top: 16px; }
 .modal .field { margin-bottom: 14px; }
+
+/* Entry modal sits just below the utility modal so Scan / Add-food stack on top */
+#entryBackdrop { z-index: 45; }
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.modal-head h2 { margin: 0; }
+.close-x { font-size: 18px; color: var(--muted); }
+
+/* ── History header (title + New button) ── */
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.history-head h2 { margin: 0; }
+.primary-btn.compact { width: auto; padding: 10px 16px; font-size: 14px; }
+
+/* ── Freshly-saved entry highlight ── */
+@keyframes just-added {
+  0%   { background: var(--brand-soft); border-color: var(--brand); transform: translateY(-6px); opacity: 0.4; }
+  30%  { transform: translateY(0); opacity: 1; }
+  100% { background: #fff; border-color: var(--line); }
+}
+.entry.just-added { animation: just-added 1.6s ease-out; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(20px);
+  z-index: 60;
+  max-width: 88%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 16px;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s, transform .2s;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.error { background: var(--bad); }

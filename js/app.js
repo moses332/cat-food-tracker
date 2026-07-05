@@ -15,6 +15,7 @@ const state = {
   catalog: [],
   entries: [],
   barcodes: [],
+  lastAddedId: null, // entry to highlight after a save
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -23,15 +24,13 @@ init();
 async function init() {
   const mode = await initStore();
   renderModeBadge(mode);
-  buildReactionGrids();
-  resetFedAtToNow();
   wireTabs();
-  wireForm();
+  wireHistoryTab();
   wirePetsTab();
   await refreshAll();
 
-  // Debug hook: lets tests drive the barcode flow without a physical camera.
-  window.__pp = { resolveBarcode, openScanModal, state };
+  // Debug hook: lets tests drive flows without a physical camera.
+  window.__pp = { resolveBarcode, openScanModal, openEntryModal, state };
 }
 
 async function refreshAll() {
@@ -44,7 +43,6 @@ async function refreshAll() {
   state.entries = state.activePetId ? await store.getEntries(state.activePetId) : [];
 
   renderPetSwitcher();
-  renderFoodSelect();
   renderHistory();
   renderInsights();
   renderPetList();
@@ -86,21 +84,110 @@ function renderPetSwitcher() {
   wrap.appendChild(sel);
 }
 
-// ── Log form ─────────────────────────────────────────────────────────────────
-function buildReactionGrids() {
-  for (const [hostId, group] of [['#initialReactions', 'initial'], ['#longtermReactions', 'longterm']]) {
-    const host = $(hostId);
-    host.innerHTML = REACTIONS.map(r => `
-      <label title="${r.hint}">
-        <input type="radio" name="${group}" value="${r.value}" />
-        <span class="emoji">${r.emoji}</span>
-        <span class="name">${r.label}</span>
-      </label>`).join('');
-  }
+// ── New-feeding modal ─────────────────────────────────────────────────────────
+function wireHistoryTab() {
+  $('#newEntryBtn').addEventListener('click', openEntryModal);
+  $('#entryBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'entryBackdrop') closeEntryModal();
+  });
 }
 
+function openEntryModal() {
+  if (!state.activePetId) {
+    toast('Add a pet first (🐾 Pets tab).', true);
+    return;
+  }
+  $('#entryBox').innerHTML = `
+    <div class="modal-head">
+      <h2>New feeding</h2>
+      <button type="button" class="icon-btn close-x" id="entryClose" title="Close">✕</button>
+    </div>
+    <form id="entryForm">
+      <label class="field">
+        <span>Food</span>
+        <button type="button" id="scanBtn" class="scan-btn">📷 Scan a can</button>
+        <div class="food-row">
+          <select id="foodSelect" required></select>
+          <button type="button" id="addFoodBtn" class="ghost-btn" title="Add a custom food">+ New</button>
+        </div>
+      </label>
+
+      <fieldset class="field">
+        <legend>Reaction <small>(how did she take to it?)</small></legend>
+        <div class="reaction-grid" id="entryReactions"></div>
+      </fieldset>
+
+      <label class="field">
+        <span>Time fed</span>
+        <input type="datetime-local" id="fedAt" required />
+      </label>
+
+      <label class="field">
+        <span>Notes <small>(optional)</small></span>
+        <textarea id="notes" rows="2" placeholder="e.g. ate around the gravy, only the chunks…"></textarea>
+      </label>
+
+      <button type="submit" class="primary-btn">Save feeding</button>
+    </form>`;
+
+  buildReactionGrid('#entryReactions', 'reaction');
+  renderFoodSelect();
+  $('#fedAt').value = toLocalInput(new Date());
+
+  $('#entryClose').addEventListener('click', closeEntryModal);
+  $('#addFoodBtn').addEventListener('click', openAddFoodModal);
+  $('#scanBtn').addEventListener('click', openScanModal);
+  $('#entryForm').addEventListener('submit', submitEntry);
+
+  $('#entryBackdrop').hidden = false;
+}
+
+function closeEntryModal() {
+  stopScan();
+  $('#entryBackdrop').hidden = true;
+  $('#entryBox').innerHTML = '';
+}
+
+async function submitEntry(e) {
+  e.preventDefault();
+  const food = state.catalog[$('#foodSelect').value];
+  if (!food) { toast('Pick a food.', true); return; }
+  const reaction = $('input[name="reaction"]:checked')?.value || null;
+  if (!reaction) { toast('Pick a reaction.', true); return; }
+
+  const row = await store.addEntry({
+    pet_id: state.activePetId,
+    food_brand: food.brand || '',
+    food_name: food.name,
+    food_label: foodLabel(food),
+    initial_reaction: reaction,   // single rating (column kept for back-compat)
+    longterm_reaction: null,
+    fed_at: fromLocalInput($('#fedAt').value).toISOString(),
+    notes: $('#notes').value.trim(),
+  });
+
+  closeEntryModal();
+  state.lastAddedId = row?.id ?? null;
+  goToTab('history');
+  state.entries = await store.getEntries(state.activePetId);
+  renderHistory();   // highlights the freshly-added row
+  renderInsights();
+}
+
+// Single reaction picker used by both the new-feeding and edit modals.
+function buildReactionGrid(hostSel, group, selected) {
+  $(hostSel).innerHTML = REACTIONS.map(r => `
+    <label title="${r.hint}">
+      <input type="radio" name="${group}" value="${r.value}" ${r.value === selected ? 'checked' : ''}/>
+      <span class="emoji">${r.emoji}</span>
+      <span class="name">${r.label}</span>
+    </label>`).join('');
+}
+
+// Populates the food dropdown (only present while the entry modal is open).
 function renderFoodSelect() {
   const sel = $('#foodSelect');
+  if (!sel) return;
   const current = sel.value;
   sel.innerHTML = `<option value="" disabled selected>Choose a food…</option>` +
     state.catalog.map((f, i) =>
@@ -109,73 +196,33 @@ function renderFoodSelect() {
   if (current) sel.value = current;
 }
 
-function resetFedAtToNow() {
-  $('#fedAt').value = toLocalInput(new Date());
-}
-
-function wireForm() {
-  $('#addFoodBtn').addEventListener('click', openAddFoodModal);
-  $('#scanBtn').addEventListener('click', openScanModal);
-
-  $('#entryForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!state.activePetId) {
-      flashMsg('Add a pet first (🐾 tab).', true);
-      return;
-    }
-    const foodIdx = $('#foodSelect').value;
-    const food = state.catalog[foodIdx];
-    if (!food) { flashMsg('Pick a food.', true); return; }
-
-    const initial = $('input[name="initial"]:checked')?.value || null;
-    const longterm = $('input[name="longterm"]:checked')?.value || null;
-    if (!initial) { flashMsg('Pick at least an initial reaction.', true); return; }
-
-    await store.addEntry({
-      pet_id: state.activePetId,
-      food_brand: food.brand || '',
-      food_name: food.name,
-      food_label: foodLabel(food),
-      initial_reaction: initial,
-      longterm_reaction: longterm,
-      fed_at: fromLocalInput($('#fedAt').value).toISOString(),
-      notes: $('#notes').value.trim(),
-    });
-
-    e.target.reset();
-    buildReactionGrids();
-    resetFedAtToNow();
-    flashMsg('Saved! 😺');
-    state.entries = await store.getEntries(state.activePetId);
-    renderHistory();
-    renderInsights();
-  });
-}
-
-function flashMsg(text, isError = false) {
-  const el = $('#entryMsg');
+// Lightweight transient toast (replaces the old inline form message).
+function toast(text, isError = false) {
+  let el = $('#toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    document.body.appendChild(el);
+  }
   el.textContent = text;
-  el.hidden = false;
-  el.style.background = isError ? '#fdebee' : '#e7f8ef';
-  el.style.color = isError ? 'var(--bad)' : 'var(--good)';
-  clearTimeout(flashMsg._t);
-  flashMsg._t = setTimeout(() => { el.hidden = true; }, 2600);
+  el.className = isError ? 'show error' : 'show';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.className = ''; }, 2600);
 }
 
 // ── History ──────────────────────────────────────────────────────────────────
 function renderHistory() {
   const host = $('#historyList');
   if (!state.entries.length) {
-    host.innerHTML = `<p class="empty">No feedings logged yet.<br>Head to 📝 Log to add the first one.</p>`;
+    host.innerHTML = `<p class="empty">No feedings yet.<br>Tap <strong>＋ New feeding</strong> to add the first one.</p>`;
     return;
   }
   host.innerHTML = state.entries.map(e => {
-    const ri = REACTION_BY_VALUE[e.initial_reaction];
-    const rl = REACTION_BY_VALUE[e.longterm_reaction];
-    const emojis = `${ri ? ri.emoji : '·'}${rl ? ' → ' + rl.emoji : ''}`;
+    const r = REACTION_BY_VALUE[e.initial_reaction];
+    const isNew = e.id === state.lastAddedId;
     return `
-      <div class="entry" data-id="${e.id}">
-        <div class="react-emojis" title="initial → long-term">${emojis}</div>
+      <div class="entry${isNew ? ' just-added' : ''}" data-id="${e.id}">
+        <div class="react-emojis" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</div>
         <div class="body">
           <div class="food">${escapeHtml(e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name }))}</div>
           <div class="when">${fmtWhen(e.fed_at)}</div>
@@ -187,6 +234,8 @@ function renderHistory() {
         </div>
       </div>`;
   }).join('');
+
+  state.lastAddedId = null; // one-shot: only animate once
 
   $$('.entry', host).forEach(row => {
     const id = row.dataset.id;
@@ -212,7 +261,7 @@ function renderInsights() {
   $('#kpiGrid').innerHTML = [
     kpi(s.total, 'Feedings logged'),
     kpi(s.acceptanceRate == null ? '—' : pct(s.acceptanceRate), 'Acceptance rate'),
-    kpi(s.avgInitialScore == null ? '—' : s.avgInitialScore.toFixed(1) + '/4', 'Avg first reaction'),
+    kpi(s.avgInitialScore == null ? '—' : s.avgInitialScore.toFixed(1) + '/4', 'Avg rating'),
     kpi(s.lastFed ? fmtRelative(s.lastFed) : '—', 'Last fed'),
   ].join('');
 
@@ -261,20 +310,13 @@ function spark(trend) {
     <p class="muted" style="margin-top:8px">Each bar = one week's acceptance rate.</p>`;
 }
 function leaderboardRow(f) {
-  const init = f.avgInitial == null ? '—' : f.avgInitial.toFixed(1);
-  let drift = '<span class="drift-flat">—</span>';
-  if (f.drift != null) {
-    const cls = f.drift > 0.2 ? 'drift-up' : f.drift < -0.2 ? 'drift-down' : 'drift-flat';
-    const sign = f.drift > 0 ? '▲' : f.drift < 0 ? '▼' : '–';
-    drift = `<span class="${cls}">${sign}${Math.abs(f.drift).toFixed(1)}</span>`;
-  }
+  const avg = f.avgInitial == null ? '—' : f.avgInitial.toFixed(1);
   return `<div class="lb-row">
     <div>
       <div class="lb-name">${escapeHtml(f.label)}</div>
       <div class="lb-sub">${f.count} feeding${f.count === 1 ? '' : 's'}${f.acceptance != null ? ' · ' + pct(f.acceptance) + ' accepted' : ''}</div>
     </div>
-    <div class="lb-stat" title="Avg first reaction (0–4)">${init}</div>
-    <div class="lb-stat" title="Drift: long-term minus initial">${drift}</div>
+    <div class="lb-stat" title="Average rating (0–4)">${avg}<span class="lb-unit">/4</span></div>
   </div>`;
 }
 
@@ -410,7 +452,7 @@ async function resolveBarcode(code) {
   if (match) {
     await selectFoodByLabel(match.food_label, match.food_brand, match.food_name);
     closeModal();
-    flashMsg(`✓ Recognized: ${match.food_label}`);
+    toast(`✓ Recognized: ${match.food_label}`);
     return;
   }
   const status = $('#scanStatus');
@@ -463,7 +505,7 @@ function openLinkBarcodeModal(code, guess) {
     renderFoodSelect();
     await selectFoodByLabel(label, brand, name);
     closeModal();
-    flashMsg(`✓ Linked & selected: ${label}`);
+    toast(`✓ Linked & selected: ${label}`);
   });
 }
 
@@ -556,19 +598,12 @@ function openPetModal(id) {
 function openEditEntryModal(id) {
   const e = state.entries.find(x => x.id === id);
   if (!e) return;
-  const reactionOptions = (group, selected) => REACTIONS.map(r => `
-    <label title="${r.hint}">
-      <input type="radio" name="${group}" value="${r.value}" ${r.value === selected ? 'checked' : ''}/>
-      <span class="emoji">${r.emoji}</span><span class="name">${r.label}</span>
-    </label>`).join('');
 
   openModal(`
     <h2>Edit feeding</h2>
     <div class="field"><span>${escapeHtml(e.food_label)}</span></div>
-    <fieldset class="field"><legend>Initial reaction</legend>
-      <div class="reaction-grid">${reactionOptions('e_initial', e.initial_reaction)}</div></fieldset>
-    <fieldset class="field"><legend>Long-term reaction</legend>
-      <div class="reaction-grid">${reactionOptions('e_longterm', e.longterm_reaction)}</div></fieldset>
+    <fieldset class="field"><legend>Reaction</legend>
+      <div class="reaction-grid" id="e_reactions"></div></fieldset>
     <label class="field"><span>Time fed</span>
       <input type="datetime-local" id="e_fedAt" value="${toLocalInput(new Date(e.fed_at))}" /></label>
     <label class="field"><span>Notes</span>
@@ -577,11 +612,11 @@ function openEditEntryModal(id) {
       <button class="primary-btn" id="m_save">Save changes</button>
       <button class="ghost-btn" id="m_cancel">Cancel</button>
     </div>`);
+  buildReactionGrid('#e_reactions', 'e_reaction', e.initial_reaction);
   $('#m_cancel').addEventListener('click', closeModal);
   $('#m_save').addEventListener('click', async () => {
     await store.updateEntry(id, {
-      initial_reaction: $('input[name="e_initial"]:checked')?.value || null,
-      longterm_reaction: $('input[name="e_longterm"]:checked')?.value || null,
+      initial_reaction: $('input[name="e_reaction"]:checked')?.value || null,
       fed_at: fromLocalInput($('#e_fedAt').value).toISOString(),
       notes: $('#e_notes').value.trim(),
     });
@@ -626,12 +661,13 @@ async function importData(ev) {
 // ── Tab navigation ───────────────────────────────────────────────────────────
 function wireTabs() {
   $$('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const go = btn.dataset.go;
-      $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-      $$('.tab').forEach(t => { t.hidden = t.dataset.tab !== go; });
-    });
+    btn.addEventListener('click', () => goToTab(btn.dataset.go));
   });
+}
+
+function goToTab(go) {
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.go === go));
+  $$('.tab').forEach(t => { t.hidden = t.dataset.tab !== go; });
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────

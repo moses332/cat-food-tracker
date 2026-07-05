@@ -26,8 +26,8 @@ export function summarize(entries) {
   };
 }
 
-// Per-food rollup: how she rates each food, and crucially whether the long-term
-// reaction drifts from the first impression (the picky-eater money question).
+// Per-food rollup: how she rates each food on average, and how often she
+// accepts it. Sorted best-liked first for the leaderboard.
 export function perFood(entries) {
   const groups = new Map();
   for (const e of entries) {
@@ -38,17 +38,11 @@ export function perFood(entries) {
 
   const rows = [];
   for (const [label, list] of groups) {
-    const initials = list.map(e => reactionScore(e.initial_reaction)).filter(n => n != null);
-    const longterms = list.map(e => reactionScore(e.longterm_reaction)).filter(n => n != null);
-    const avgInit = avg(initials);
-    const avgLong = avg(longterms);
+    const ratings = list.map(e => reactionScore(e.initial_reaction)).filter(n => n != null);
     rows.push({
       label,
       count: list.length,
-      avgInitial: avgInit,
-      avgLongterm: avgLong,
-      // Negative drift = she liked it at first but cooled on it over time.
-      drift: avgLong != null && avgInit != null ? avgLong - avgInit : null,
+      avgInitial: avg(ratings),
       acceptance: rate(list.map(e => e.initial_reaction)),
     });
   }
