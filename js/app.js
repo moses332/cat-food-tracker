@@ -109,6 +109,7 @@ function showLoginGate() {
       <div class="auth-brand"><span class="brand-emoji">🐱</span><h1>Picky Paws</h1></div>
       <p class="muted">Sign in to see Sybil's log.</p>
       <div id="authStep"></div>
+      <p class="auth-foot"><a href="help.html">Need help signing in?</a></p>
     </div>`;
   gate.hidden = false;
   renderEmailStep();

@@ -449,6 +449,8 @@ code {
 .auth-card .primary-btn { margin-top: 4px; }
 .auth-card .ghost-btn { width: 100%; margin-top: 8px; }
 .auth-msg { color: var(--bad); font-size: 13px; min-height: 18px; margin: 10px 0 0; }
+.auth-foot { text-align: center; margin: 14px 0 0; font-size: 13px; }
+.auth-foot a { color: var(--brand); font-weight: 600; }
 
 /* Attribution line on a history entry */
 .entry .byline { font-size: 11px; color: var(--muted); margin-top: 5px; font-style: italic; }

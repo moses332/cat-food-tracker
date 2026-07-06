@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#6b4ee6" />
+  <title>Picky Paws — How to use</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* This page is a plain scrolling doc, not the app shell. */
+    body { padding-bottom: 40px; }
+    .help-header { text-align: center; }
+    .help-header h1 { margin: 0; font-size: 22px; }
+    .help-header p { margin: 4px 0 0; opacity: 0.92; font-size: 14px; }
+    .help-card ol, .help-card ul { margin: 8px 0 0; padding-left: 20px; }
+    .help-card li { margin: 6px 0; line-height: 1.5; }
+    .help-card h2 { display: flex; align-items: center; gap: 8px; }
+    .reaction-key { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .reaction-key div { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+    .reaction-key .em { font-size: 22px; width: 28px; text-align: center; }
+    .back-link {
+      display: inline-block; margin: 4px 16px 0; color: var(--brand);
+      font-weight: 600; text-decoration: none; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-emoji">🐱</span>
+      <div class="help-header">
+        <h1>Picky Paws</h1>
+        <p>How to use it</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <a class="back-link" href="index.html">← Back to the app</a>
+
+    <div class="card help-card">
+      <h2>👋 What is this?</h2>
+      <p class="muted">Picky Paws tracks what cat food <strong>Sybil</strong> likes and dislikes, so
+      whoever's feeding her knows what to reach for. Every feeding gets logged with a rating,
+      and the app keeps a leaderboard of her favourites.</p>
+    </div>
+
+    <div class="card help-card">
+      <h2>🔑 Signing in</h2>
+      <ol>
+        <li>Open the app and enter <strong>your email address</strong> (the one you were added with).</li>
+        <li>Tap <strong>“Email me a code”</strong>.</li>
+        <li>Check your email for a message from <em>Picky Paws</em> with a numeric <strong>code</strong>
+          (check your spam folder if it's not there in a minute).</li>
+        <li>Type the code in and tap <strong>Sign in</strong>. First time, it'll ask your name — that's
+          what shows on feedings you log.</li>
+      </ol>
+      <p class="muted">You'll stay signed in, so you normally only do this once. If a code doesn't
+      arrive, wait a couple of minutes and tap to resend.</p>
+    </div>
+
+    <div class="card help-card">
+      <h2>🍽️ Logging a feeding</h2>
+      <ol>
+        <li>On the <strong>History</strong> screen, tap <strong>“＋ New feeding”</strong>.</li>
+        <li>Pick the food — either choose it from the dropdown, or tap <strong>“📷 Scan a can”</strong>
+          and point your camera at the barcode.</li>
+        <li>Tap how she reacted (see the ratings below).</li>
+        <li>The time is set to now — change it if you're logging it later.</li>
+        <li>Tap <strong>Save feeding</strong>. It'll pop into the history list.</li>
+      </ol>
+    </div>
+
+    <div class="card help-card">
+      <h2>😻 What the ratings mean</h2>
+      <div class="reaction-key">
+        <div><span class="em">😻</span> <strong>Loved it</strong> — devoured it, wanted more</div>
+        <div><span class="em">🙂</span> <strong>Ate it</strong> — finished it, no fuss</div>
+        <div><span class="em">😐</span> <strong>Picky</strong> — ate some, left the rest</div>
+        <div><span class="em">😾</span> <strong>Nibbled</strong> — a bite or two, then done</div>
+        <div><span class="em">🙅</span> <strong>Refused</strong> — walked away, ate nothing</div>
+      </div>
+    </div>
+
+    <div class="card help-card">
+      <h2>📷 Scanning cans</h2>
+      <p class="muted">The first time you scan a particular can, the app asks which food it is — pick it
+      once and it remembers. After that, scanning that can picks the food instantly. If a barcode won't
+      scan, tap “Can't scan? Enter the number” and type the digits, or just choose from the dropdown.</p>
+    </div>
+
+    <div class="card help-card">
+      <h2>✏️ Fixing a mistake</h2>
+      <p class="muted">On any feeding in the History list, tap the <strong>pencil ✎</strong> to change the
+      rating, time, or notes, or the <strong>bin 🗑</strong> to delete it. Everyone sees the same list, so
+      your changes show up on the owners' phones too.</p>
+    </div>
+
+    <div class="card help-card">
+      <h2>📊 The leaderboard</h2>
+      <p class="muted">The <strong>Insights</strong> tab shows Sybil's foods ranked by how much she likes
+      them — handy for deciding what to open next. Top of the list = her favourites.</p>
+    </div>
+
+    <div class="card help-card">
+      <h2>🆘 Stuck?</h2>
+      <p class="muted">If you can't sign in or something looks broken, message the owners — they can add or
+      fix your access in under a minute, even remotely.</p>
+    </div>
+
+    <a class="back-link" href="index.html">← Back to the app</a>
+  </main>
+</body>
+</html>

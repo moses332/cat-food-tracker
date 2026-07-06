@@ -35,6 +35,11 @@
 
     <!-- INSIGHTS tab -->
     <section class="tab" id="tab-insights" data-tab="insights" hidden>
+      <div class="card">
+        <h2>🏆 Food leaderboard</h2>
+        <p class="muted">Her foods ranked by average rating — best-liked at the top.</p>
+        <div id="leaderboard"></div>
+      </div>
       <div class="kpi-grid" id="kpiGrid"></div>
       <div class="card">
         <h2>Reaction breakdown</h2>
@@ -43,11 +48,6 @@
       <div class="card">
         <h2>Acceptance over time</h2>
         <div id="trendChart"></div>
-      </div>
-      <div class="card">
-        <h2>Food leaderboard</h2>
-        <p class="muted">Her foods ranked by average rating — best-liked at the top.</p>
-        <div id="leaderboard"></div>
       </div>
     </section>
 
@@ -70,6 +70,11 @@
           <button type="button" id="importBtn" class="ghost-btn">Import JSON</button>
           <input type="file" id="importFile" accept="application/json" hidden />
         </div>
+      </div>
+      <div class="card">
+        <h2>Help</h2>
+        <p class="muted">New here (or house-sitting)? The guide covers signing in, logging a feeding, and scanning cans.</p>
+        <a class="ghost-btn" href="help.html" style="display:inline-block;text-decoration:none">📖 How to use Picky Paws</a>
       </div>
     </section>
   </main>
