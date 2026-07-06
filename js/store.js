@@ -133,6 +133,32 @@ async function makeSupabaseBackend() {
   return {
     mode: 'shared',
 
+    // ── Auth (passwordless email OTP) ──
+    async getUser() {
+      const { data } = await sb.auth.getUser();
+      return data?.user ?? null;
+    },
+    async sendCode(email) {
+      // shouldCreateUser:false → invite-only (unknown emails are rejected).
+      const { error } = await sb.auth.signInWithOtp({
+        email, options: { shouldCreateUser: false },
+      });
+      if (error) throw error;
+    },
+    async verifyCode(email, token) {
+      const { data, error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+      if (error) throw error;
+      return data.user;
+    },
+    async setDisplayName(name) {
+      const { data, error } = await sb.auth.updateUser({ data: { name } });
+      if (error) throw error;
+      return data.user;
+    },
+    async signOut() {
+      await sb.auth.signOut();
+    },
+
     async getPets() {
       return must(await sb.from('pets').select('*').order('name'));
     },
@@ -225,9 +251,12 @@ export async function getFoodCatalog() {
 }
 
 async function seedFirstRun() {
-  // On a brand-new install, create a default pet so the app is usable instantly.
+  // Local only: give a brand-new install a default pet so it's usable instantly.
+  // In shared mode we must NOT query here — it runs before sign-in, and once
+  // the database is locked to authenticated users an anonymous read would fail.
+  if (backend.mode !== 'local') return;
   const pets = await backend.getPets();
-  if (pets.length === 0 && backend.mode === 'local') {
+  if (pets.length === 0) {
     await backend.addPet({ name: 'My Cat', species: 'Cat', notes: '' });
   }
 }

@@ -16,6 +16,7 @@ const state = {
   entries: [],
   barcodes: [],
   lastAddedId: null, // entry to highlight after a save
+  user: null,        // signed-in user (shared mode only)
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -27,11 +28,27 @@ async function init() {
   wireTabs();
   wireHistoryTab();
   wirePetsTab();
-  await refreshAll();
 
   // Debug hook: lets tests drive flows without a physical camera.
   window.__pp = { resolveBarcode, openScanModal, openEntryModal, state };
+
+  // Shared mode requires sign-in; local mode has no accounts.
+  if (requiresAuth()) {
+    state.user = await store.getUser();
+    if (!state.user) { showLoginGate(); return; } // gate resumes into startApp()
+  }
+  await startApp();
 }
+
+async function startApp() {
+  hideLoginGate();
+  await refreshAll();
+  renderAccount();
+  if (state.user && !state.user.user_metadata?.name) openNameModal();
+}
+
+function requiresAuth() { return syncMode() === 'shared'; }
+function userName(u) { return u?.user_metadata?.name || (u?.email || '').split('@')[0] || 'Someone'; }
 
 async function refreshAll() {
   state.pets = await store.getPets();
@@ -82,6 +99,124 @@ function renderPetSwitcher() {
     renderPetList();
   });
   wrap.appendChild(sel);
+}
+
+// ── Auth gate (passwordless email code) ──────────────────────────────────────
+function showLoginGate() {
+  const gate = $('#authGate');
+  gate.innerHTML = `
+    <div class="auth-card card">
+      <div class="auth-brand"><span class="brand-emoji">🐱</span><h1>Picky Paws</h1></div>
+      <p class="muted">Sign in to see Sybil's log.</p>
+      <div id="authStep"></div>
+    </div>`;
+  gate.hidden = false;
+  renderEmailStep();
+}
+function hideLoginGate() {
+  const gate = $('#authGate');
+  gate.hidden = true;
+  gate.innerHTML = '';
+}
+
+function renderEmailStep(prefill = '') {
+  $('#authStep').innerHTML = `
+    <label class="field"><span>Your email</span>
+      <input id="authEmail" type="email" inputmode="email" autocomplete="email"
+             value="${escapeAttr(prefill)}" placeholder="you@example.com" /></label>
+    <button type="button" class="primary-btn" id="authSend">Email me a code</button>
+    <p class="auth-msg" id="authMsg"></p>`;
+  $('#authEmail').focus();
+  $('#authSend').addEventListener('click', sendLoginCode);
+  $('#authEmail').addEventListener('keydown', e => { if (e.key === 'Enter') sendLoginCode(); });
+}
+
+async function sendLoginCode() {
+  const email = $('#authEmail').value.trim().toLowerCase();
+  if (!email) { $('#authEmail').focus(); return; }
+  const btn = $('#authSend');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await store.sendCode(email);
+    renderCodeStep(email);
+  } catch (err) {
+    authError(err?.message || "Couldn't send a code. Is your email on the guest list?");
+    btn.disabled = false; btn.textContent = 'Email me a code';
+  }
+}
+
+function renderCodeStep(email) {
+  $('#authStep').innerHTML = `
+    <p class="muted">We emailed a 6-digit code to <strong>${escapeHtml(email)}</strong>.</p>
+    <label class="field"><span>Code</span>
+      <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" /></label>
+    <button type="button" class="primary-btn" id="authVerify">Sign in</button>
+    <button type="button" class="ghost-btn" id="authBack">Use a different email</button>
+    <p class="auth-msg" id="authMsg"></p>`;
+  $('#authCode').focus();
+  $('#authVerify').addEventListener('click', () => verifyLoginCode(email));
+  $('#authCode').addEventListener('keydown', e => { if (e.key === 'Enter') verifyLoginCode(email); });
+  $('#authBack').addEventListener('click', () => renderEmailStep(email));
+}
+
+async function verifyLoginCode(email) {
+  const token = $('#authCode').value.trim();
+  if (token.length < 6) { $('#authCode').focus(); return; }
+  const btn = $('#authVerify');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    state.user = await store.verifyCode(email, token);
+    await startApp();
+  } catch {
+    authError("That code didn't work — double-check it, or go back and resend.");
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+}
+
+function authError(msg) { const el = $('#authMsg'); if (el) el.textContent = msg; }
+
+// Account card (Pets tab): who's signed in, change name, sign out.
+function renderAccount() {
+  const card = $('#accountCard');
+  const box = $('#accountBox');
+  if (!card || !box) return;
+  if (!requiresAuth() || !state.user) { card.hidden = true; return; }
+  card.hidden = false;
+  box.innerHTML = `
+    <p class="muted">Signed in as <strong>${escapeHtml(userName(state.user))}</strong><br>${escapeHtml(state.user.email)}</p>
+    <div class="btn-row">
+      <button type="button" class="ghost-btn" id="acctName">Change name</button>
+      <button type="button" class="ghost-btn" id="acctOut">Sign out</button>
+    </div>`;
+  $('#acctName').addEventListener('click', openNameModal);
+  $('#acctOut').addEventListener('click', signOut);
+}
+
+function openNameModal() {
+  openModal(`
+    <h2>What should we call you?</h2>
+    <p class="muted">This name shows on feedings you log.</p>
+    <label class="field"><span>Your name</span>
+      <input id="dn_name" value="${escapeAttr(state.user?.user_metadata?.name || '')}" placeholder="e.g. Pat" /></label>
+    <div class="btn-row">
+      <button type="button" class="primary-btn" id="dn_save">Save</button>
+      <button type="button" class="ghost-btn" id="dn_skip">Skip</button>
+    </div>`);
+  $('#dn_skip').addEventListener('click', closeModal);
+  $('#dn_save').addEventListener('click', async () => {
+    const name = $('#dn_name').value.trim();
+    if (!name) { $('#dn_name').focus(); return; }
+    try { state.user = await store.setDisplayName(name); } catch { /* keep going */ }
+    closeModal();
+    renderAccount();
+  });
+}
+
+async function signOut() {
+  if (!confirm('Sign out?')) return;
+  await store.signOut();
+  state.user = null;
+  location.reload(); // cleanest reset → login gate reappears
 }
 
 // ── New-feeding modal ─────────────────────────────────────────────────────────
@@ -164,6 +299,8 @@ async function submitEntry(e) {
     longterm_reaction: null,
     fed_at: fromLocalInput($('#fedAt').value).toISOString(),
     notes: $('#notes').value.trim(),
+    created_by: state.user?.id ?? null,
+    created_by_name: state.user ? userName(state.user) : null,
   });
 
   closeEntryModal();
@@ -227,6 +364,7 @@ function renderHistory() {
           <div class="food">${escapeHtml(e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name }))}</div>
           <div class="when">${fmtWhen(e.fed_at)}</div>
           ${e.notes ? `<div class="note">${escapeHtml(e.notes)}</div>` : ''}
+          ${byline(e)}
         </div>
         <div class="row-actions">
           <button class="icon-btn" data-act="edit" title="Edit">✎</button>
@@ -619,6 +757,8 @@ function openEditEntryModal(id) {
       initial_reaction: $('input[name="e_reaction"]:checked')?.value || null,
       fed_at: fromLocalInput($('#e_fedAt').value).toISOString(),
       notes: $('#e_notes').value.trim(),
+      edited_by_name: state.user ? userName(state.user) : null,
+      edited_at: state.user ? new Date().toISOString() : null,
     });
     closeModal();
     state.entries = await store.getEntries(state.activePetId);
@@ -679,6 +819,16 @@ function avatarFor(p) {
 }
 function pct(frac) { return Math.round(frac * 100) + '%'; }
 function emptyNote(t) { return `<p class="muted">${t}</p>`; }
+
+// "by Pat · edited by Sam" — only rendered for entries that carry attribution.
+function byline(e) {
+  const parts = [];
+  if (e.created_by_name) parts.push(`by ${escapeHtml(e.created_by_name)}`);
+  if (e.edited_by_name && e.edited_by_name !== e.created_by_name) {
+    parts.push(`edited by ${escapeHtml(e.edited_by_name)}`);
+  }
+  return parts.length ? `<div class="byline">${parts.join(' · ')}</div>` : '';
+}
 
 function toLocalInput(d) {
   const pad = n => String(n).padStart(2, '0');

@@ -53,6 +53,10 @@
 
     <!-- PETS tab -->
     <section class="tab" id="tab-pets" data-tab="pets" hidden>
+      <div class="card" id="accountCard" hidden>
+        <h2>Account</h2>
+        <div id="accountBox"></div>
+      </div>
       <div class="card">
         <h2>Pets &amp; profiles</h2>
         <div id="petList" class="pet-list"></div>
@@ -75,6 +79,9 @@
     <button class="tab-btn" data-go="insights"><span>📊</span>Insights</button>
     <button class="tab-btn" data-go="pets"><span>🐾</span>Pets</button>
   </nav>
+
+  <!-- Login gate (shown only in shared mode when signed out) -->
+  <div class="auth-gate" id="authGate" hidden></div>
 
   <!-- New-feeding form lives in its own modal layer (below the utility modal,
        so Scan / Add-food can stack on top of it) -->

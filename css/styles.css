@@ -391,3 +391,22 @@ code {
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.error { background: var(--bad); }
+
+/* ── Login gate ── */
+.auth-gate {
+  position: fixed; inset: 0; z-index: 100;
+  background: linear-gradient(135deg, var(--brand), #9b7bff);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.auth-gate[hidden] { display: none; }
+.auth-card { width: 100%; max-width: 380px; margin: 0; }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.auth-brand h1 { margin: 0; font-size: 22px; }
+.auth-brand .brand-emoji { font-size: 30px; }
+.auth-card .primary-btn { margin-top: 4px; }
+.auth-card .ghost-btn { width: 100%; margin-top: 8px; }
+.auth-msg { color: var(--bad); font-size: 13px; min-height: 18px; margin: 10px 0 0; }
+
+/* Attribution line on a history entry */
+.entry .byline { font-size: 11px; color: var(--muted); margin-top: 5px; font-style: italic; }
