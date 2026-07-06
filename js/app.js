@@ -149,7 +149,7 @@ function renderCodeStep(email) {
   $('#authStep').innerHTML = `
     <p class="muted">We emailed a 6-digit code to <strong>${escapeHtml(email)}</strong>.</p>
     <label class="field"><span>Code</span>
-      <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" /></label>
+      <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Enter the code" /></label>
     <button type="button" class="primary-btn" id="authVerify">Sign in</button>
     <button type="button" class="ghost-btn" id="authBack">Use a different email</button>
     <p class="auth-msg" id="authMsg"></p>`;
@@ -161,7 +161,7 @@ function renderCodeStep(email) {
 
 async function verifyLoginCode(email) {
   const token = $('#authCode').value.trim();
-  if (token.length < 6) { $('#authCode').focus(); return; }
+  if (!token) { $('#authCode').focus(); return; }
   const btn = $('#authVerify');
   btn.disabled = true; btn.textContent = 'Signing in…';
   try {
