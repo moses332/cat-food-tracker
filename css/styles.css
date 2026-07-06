@@ -362,13 +362,55 @@ code {
 .history-head h2 { margin: 0; }
 .primary-btn.compact { width: auto; padding: 10px 16px; font-size: 14px; }
 
-/* ── Freshly-saved entry highlight ── */
+/* ── Freshly-saved entry: a flashy "pop" celebration ── */
 @keyframes just-added {
-  0%   { background: var(--brand-soft); border-color: var(--brand); transform: translateY(-6px); opacity: 0.4; }
-  30%  { transform: translateY(0); opacity: 1; }
-  100% { background: #fff; border-color: var(--line); }
+  0% {
+    transform: scale(0.85) translateY(-16px);
+    opacity: 0;
+    background: #fff;
+    box-shadow: 0 0 0 0 rgba(107, 78, 230, 0);
+  }
+  14% {
+    transform: scale(1.06) translateY(0);
+    opacity: 1;
+    background: var(--brand-soft);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 6px rgba(107, 78, 230, 0.30), 0 12px 32px rgba(107, 78, 230, 0.45);
+  }
+  32% {
+    transform: scale(0.99);
+    background: #e7f8ef;            /* success-green flash */
+    border-color: var(--good);
+    box-shadow: 0 0 0 5px rgba(43, 182, 115, 0.28), 0 8px 22px rgba(43, 182, 115, 0.30);
+  }
+  50% {
+    transform: scale(1);
+    background: var(--brand-soft);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 4px rgba(107, 78, 230, 0.18);
+  }
+  100% {
+    background: #fff;
+    border-color: var(--line);
+    box-shadow: 0 0 0 0 rgba(107, 78, 230, 0);
+  }
 }
-.entry.just-added { animation: just-added 1.6s ease-out; }
+.entry.just-added {
+  position: relative;
+  z-index: 1;
+  animation: just-added 2.4s cubic-bezier(.34, 1.56, .64, 1);
+}
+/* the reaction emoji gives a bouncy pop of its own */
+@keyframes pop-emoji {
+  0%   { transform: scale(0.4) rotate(-18deg); }
+  45%  { transform: scale(1.45) rotate(10deg); }
+  70%  { transform: scale(0.9) rotate(-4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.entry.just-added .react-emojis {
+  display: inline-block;
+  animation: pop-emoji 0.9s 0.1s cubic-bezier(.34, 1.56, .64, 1) both;
+}
 
 /* ── Toast ── */
 #toast {
