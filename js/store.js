@@ -3,6 +3,7 @@
 // (shared mode). Swapping backends is just flipping config.js.
 
 import { STARTER_FOODS } from './data.js';
+import { normalizeFood, compareFoods, foodKey } from './foods.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SYNC_ENABLED } from './config.js';
 
 const uid = () =>
@@ -108,6 +109,11 @@ const localBackend = {
     saveLocal(db);
   },
 
+  // No server in local mode; the app falls back to the public databases.
+  async lookupUpc() {
+    return null;
+  },
+
   async exportAll() {
     return loadLocal();
   },
@@ -202,6 +208,15 @@ async function makeSupabaseBackend() {
       must(await sb.from('entries').delete().eq('id', id));
     },
 
+    // Barcode → product title via the `upc-lookup` Edge Function (a tiny
+    // server-side proxy: UPCitemdb blocks direct browser calls). Returns
+    // { title, brand, source } or null.
+    async lookupUpc(code) {
+      const { data, error } = await sb.functions.invoke('upc-lookup', { body: { code } });
+      if (error) throw error;
+      return data?.found ? data : null;
+    },
+
     async exportAll() {
       return {
         pets: await this.getPets(),
@@ -235,19 +250,21 @@ export async function initStore() {
   return backend.mode;
 }
 
-// Combine the static Fancy Feast starter list with any user-added foods, and
-// de-dupe by label so custom + starter never collide visually.
+// Combine the static Fancy Feast starter list with any user-added foods,
+// tidy names into the house style (see foods.js), de-dupe, and sort by
+// brand → line → flavor so the picker reads like a grouped catalog.
 export async function getFoodCatalog() {
-  const custom = await backend.getCustomFoods();
+  const custom = (await backend.getCustomFoods()).map(f => ({ ...f, ...normalizeFood(f) }));
   const starters = STARTER_FOODS.map(f => ({ ...f, id: `starter:${f.brand}|${f.name}`, starter: true }));
-  const all = [...starters, ...custom];
   const seen = new Set();
-  return all.filter(f => {
-    const key = `${(f.brand || '').toLowerCase()}|${f.name.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return [...starters, ...custom]
+    .filter(f => {
+      const key = foodKey(f);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort(compareFoods);
 }
 
 async function seedFirstRun() {

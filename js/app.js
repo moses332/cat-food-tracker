@@ -5,6 +5,10 @@ import { store, initStore, getFoodCatalog, syncMode } from './store.js';
 import { REACTIONS, REACTION_BY_VALUE, foodLabel } from './data.js';
 import * as insights from './insights.js';
 import { startScan, stopScan } from './scanner.js';
+import {
+  normalizeFood, parseProductTitle, splitName, groupLabel,
+  matchesQuery, foodKey, linesFor, KNOWN_BRANDS,
+} from './foods.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -19,6 +23,8 @@ const state = {
   user: null,        // signed-in user (shared mode only)
 };
 
+let entryPicker = null; // food picker inside the New feeding form
+
 // ── Boot ────────────────────────────────────────────────────────────────────
 init();
 
@@ -30,7 +36,7 @@ async function init() {
   wirePetsTab();
 
   // Debug hook: lets tests drive flows without a physical camera.
-  window.__pp = { resolveBarcode, openScanModal, openEntryModal, state };
+  window.__pp = { resolveBarcode, openScanModal, openEntryModal, state, get entryPicker() { return entryPicker; } };
 
   // Shared mode requires sign-in; local mode has no accounts.
   if (requiresAuth()) {
@@ -239,14 +245,11 @@ function openEntryModal() {
       <button type="button" class="icon-btn close-x" id="entryClose" title="Close">✕</button>
     </div>
     <form id="entryForm">
-      <label class="field">
+      <div class="field">
         <span>Food</span>
         <button type="button" id="scanBtn" class="scan-btn">📷 Scan a can</button>
-        <div class="food-row">
-          <select id="foodSelect" required></select>
-          <button type="button" id="addFoodBtn" class="ghost-btn" title="Add a custom food">+ New</button>
-        </div>
-      </label>
+        <div id="foodPicker"></div>
+      </div>
 
       <fieldset class="field">
         <legend>Reaction <small>(how did she take to it?)</small></legend>
@@ -267,11 +270,12 @@ function openEntryModal() {
     </form>`;
 
   buildReactionGrid('#entryReactions', 'reaction');
-  renderFoodSelect();
+  entryPicker = mountFoodPicker($('#foodPicker'), {
+    onAddNew: (query) => openAddFoodModal(query),
+  });
   $('#fedAt').value = toLocalInput(new Date());
 
   $('#entryClose').addEventListener('click', closeEntryModal);
-  $('#addFoodBtn').addEventListener('click', openAddFoodModal);
   $('#scanBtn').addEventListener('click', openScanModal);
   $('#entryForm').addEventListener('submit', submitEntry);
 
@@ -280,13 +284,14 @@ function openEntryModal() {
 
 function closeEntryModal() {
   stopScan();
+  entryPicker = null;
   $('#entryBackdrop').hidden = true;
   $('#entryBox').innerHTML = '';
 }
 
 async function submitEntry(e) {
   e.preventDefault();
-  const food = state.catalog[$('#foodSelect').value];
+  const food = entryPicker?.get();
   if (!food) { toast('Pick a food.', true); return; }
   const reaction = $('input[name="reaction"]:checked')?.value || null;
   if (!reaction) { toast('Pick a reaction.', true); return; }
@@ -322,16 +327,149 @@ function buildReactionGrid(hostSel, group, selected) {
     </label>`).join('');
 }
 
-// Populates the food dropdown (only present while the entry modal is open).
+// Re-renders the New-feeding picker after the catalog changes.
 function renderFoodSelect() {
-  const sel = $('#foodSelect');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = `<option value="" disabled selected>Choose a food…</option>` +
-    state.catalog.map((f, i) =>
-      `<option value="${i}">${escapeHtml(foodLabel(f))}${f.starter ? '' : ' ✎'}</option>`
-    ).join('');
-  if (current) sel.value = current;
+  entryPicker?.refresh();
+}
+
+// ── Food picker (search-as-you-type) ─────────────────────────────────────────
+// Replaces the old <select>. Shows "Recently fed" first, then every food
+// grouped by brand · line. Typing filters instantly; Enter picks the top hit.
+// Returns { get(), select(food), refresh() }.
+function mountFoodPicker(host, { onPick, onAddNew, compact = false } = {}) {
+  let chosen = null;
+  host.innerHTML = `
+    <div class="picker${compact ? ' compact' : ''}">
+      <div class="picker-chosen" hidden>
+        <div class="picker-chosen-text"></div>
+        <button type="button" class="link-btn picker-change">Change</button>
+      </div>
+      <div class="picker-search">
+        <input type="search" class="picker-input" placeholder="Search foods — e.g. salmon, pâté, gravy"
+               autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" />
+        <div class="picker-list" role="listbox"></div>
+      </div>
+    </div>`;
+  const input = $('.picker-input', host);
+  const list = $('.picker-list', host);
+
+  function render() {
+    const q = input.value.trim();
+    const stats = foodStats();
+    const hits = state.catalog.filter(f => matchesQuery(f, q));
+    let html = '';
+
+    if (!q) {
+      const recent = recentFoods(5);
+      if (recent.length) {
+        html += `<div class="picker-group">Recently fed</div>` +
+          recent.map(f => pickerItem(f, stats, true)).join('');
+      }
+    }
+    let lastGroup = null;
+    for (const f of hits) {
+      const g = groupLabel(f);
+      if (g !== lastGroup) { html += `<div class="picker-group">${escapeHtml(g)}</div>`; lastGroup = g; }
+      html += pickerItem(f, stats, false);
+    }
+    if (!hits.length) {
+      html += `<div class="picker-empty">No food matches “${escapeHtml(q)}”.</div>`;
+    }
+    if (onAddNew) {
+      html += `<button type="button" class="picker-add" data-add>＋ Add ${q ? `“${escapeHtml(q)}”` : 'a new food'}</button>`;
+    }
+    list.innerHTML = html;
+  }
+
+  function pick(food) {
+    chosen = food;
+    $('.picker-chosen-text', host).innerHTML = food
+      ? `<div class="pc-name">${escapeHtml(splitName(food.name).flavor)}</div>
+         <div class="pc-sub">${escapeHtml(groupLabel(food))}</div>` : '';
+    $('.picker-chosen', host).hidden = !food;
+    $('.picker-search', host).hidden = !!food;
+    if (food) onPick?.(food);
+  }
+
+  list.addEventListener('click', (ev) => {
+    const item = ev.target.closest('[data-key]');
+    if (item) {
+      const food = state.catalog.find(f => foodKey(f) === item.dataset.key);
+      if (food) { input.blur(); pick(food); }
+      return;
+    }
+    if (ev.target.closest('[data-add]')) onAddNew?.(input.value.trim());
+  });
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const first = $('[data-key]', list);
+    if (first && input.value.trim()) first.click();
+  });
+  $('.picker-change', host).addEventListener('click', () => {
+    pick(null);
+    input.value = '';
+    render();
+    input.focus();
+  });
+
+  render();
+  return {
+    get: () => chosen,
+    select(food) {
+      const hit = food && state.catalog.find(f => foodKey(f) === foodKey(food));
+      pick(hit || null);
+    },
+    refresh() {
+      render();
+      if (chosen) this.select(chosen); // catalog objects were rebuilt
+    },
+  };
+}
+
+function pickerItem(f, stats, showGroup) {
+  const s = stats.get(foodKey(f));
+  const { flavor } = splitName(f.name);
+  const meta = s
+    ? `<span class="pi-meta">${s.emoji} fed ${s.count}×</span>`
+    : '';
+  return `<button type="button" class="picker-item" role="option" data-key="${escapeAttr(foodKey(f))}">
+      <span class="pi-name">${escapeHtml(flavor)}${showGroup ? `<small>${escapeHtml(groupLabel(f))}</small>` : ''}</span>
+      ${meta}
+    </button>`;
+}
+
+// Per-food feeding count + average-reaction emoji for the active pet.
+function foodStats() {
+  const map = new Map();
+  for (const e of state.entries) {
+    const key = foodKey(normalizeFood({ brand: e.food_brand, name: e.food_name }));
+    const s = map.get(key) || { count: 0, total: 0, rated: 0 };
+    s.count++;
+    const r = REACTION_BY_VALUE[e.initial_reaction];
+    if (r) { s.total += r.score; s.rated++; }
+    map.set(key, s);
+  }
+  for (const s of map.values()) {
+    const avg = s.rated ? Math.round(s.total / s.rated) : null;
+    s.emoji = avg == null ? '' : (REACTIONS.find(r => r.score === avg)?.emoji || '');
+  }
+  return map;
+}
+
+// Most recently fed distinct foods that are still in the catalog.
+function recentFoods(n) {
+  const out = [], seen = new Set();
+  for (const e of state.entries) { // already newest-first
+    const key = foodKey(normalizeFood({ brand: e.food_brand, name: e.food_name }));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const f = state.catalog.find(x => foodKey(x) === key);
+    if (f) out.push(f);
+    if (out.length >= n) break;
+  }
+  return out;
 }
 
 // Lightweight transient toast (replaces the old inline form message).
@@ -520,27 +658,93 @@ $('#modalBackdrop').addEventListener('click', (e) => {
   if (e.target.id === 'modalBackdrop') closeModal();
 });
 
-function openAddFoodModal() {
+// Brand / line / flavor fields shared by "Add a food" and "New can scanned".
+// Line suggestions follow the brand so names stay consistent.
+function foodFieldsHtml(prefix, { brand = 'Fancy Feast', line = '', flavor = '' } = {}) {
+  const brands = [...new Set([...KNOWN_BRANDS, ...state.catalog.map(f => f.brand).filter(Boolean)])].sort();
+  return `
+    <div class="food-fields">
+      <label class="field"><span>Brand</span>
+        <input id="${prefix}_brand" list="${prefix}_brands" value="${escapeAttr(brand)}" autocomplete="off" />
+        <datalist id="${prefix}_brands">${brands.map(b => `<option value="${escapeAttr(b)}">`).join('')}</datalist>
+      </label>
+      <label class="field"><span>Product line <small>(optional)</small></span>
+        <input id="${prefix}_line" list="${prefix}_lines" value="${escapeAttr(line)}" placeholder="e.g. Gravy Lovers" autocomplete="off" />
+        <datalist id="${prefix}_lines"></datalist>
+      </label>
+      <label class="field"><span>Flavor</span>
+        <input id="${prefix}_flavor" value="${escapeAttr(flavor)}" placeholder="e.g. Salmon & Sole" autocomplete="off" />
+      </label>
+      <p class="muted food-preview" id="${prefix}_preview"></p>
+    </div>`;
+}
+
+function wireFoodFields(prefix) {
+  const brandEl = $(`#${prefix}_brand`), lineEl = $(`#${prefix}_line`), flavorEl = $(`#${prefix}_flavor`);
+  const refreshLines = () => {
+    const known = linesFor(brandEl.value);
+    const used = state.catalog
+      .filter(f => f.brand.toLowerCase() === brandEl.value.trim().toLowerCase())
+      .map(f => splitName(f.name).line).filter(Boolean);
+    $(`#${prefix}_lines`).innerHTML = [...new Set([...known, ...used])].sort()
+      .map(l => `<option value="${escapeAttr(l)}">`).join('');
+  };
+  const preview = () => {
+    const f = readFoodFields(prefix);
+    const exists = f && state.catalog.some(c => foodKey(c) === foodKey(f));
+    $(`#${prefix}_preview`).innerHTML = f
+      ? `Will be saved as <strong>${escapeHtml(groupLabel(f))} — ${escapeHtml(splitName(f.name).flavor)}</strong>${exists ? ' (already in your list)' : ''}`
+      : '';
+  };
+  brandEl.addEventListener('input', () => { refreshLines(); preview(); });
+  lineEl.addEventListener('input', preview);
+  flavorEl.addEventListener('input', preview);
+  refreshLines();
+  preview();
+  return { refreshLines, preview };
+}
+
+// → normalized { brand, name } or null if no flavor typed.
+function readFoodFields(prefix) {
+  const flavor = $(`#${prefix}_flavor`)?.value.trim();
+  if (!flavor) return null;
+  return normalizeFood({
+    brand: $(`#${prefix}_brand`).value,
+    line: $(`#${prefix}_line`).value,
+    flavor,
+  });
+}
+
+// Make sure a food is in the catalog (adding it as a custom food if new) and
+// return the catalog's copy.
+async function ensureFood(food) {
+  let hit = state.catalog.find(f => foodKey(f) === foodKey(food));
+  if (!hit) {
+    await store.addCustomFood({ brand: food.brand, name: food.name });
+    state.catalog = await getFoodCatalog();
+    hit = state.catalog.find(f => foodKey(f) === foodKey(food));
+  }
+  return hit;
+}
+
+function openAddFoodModal(query = '') {
+  // Best guess from whatever was typed into search ("gravy lovers tuna").
+  const guess = query ? parseProductTitle(query, 'Fancy Feast') : {};
   openModal(`
-    <h2>Add a custom food</h2>
-    <label class="field"><span>Brand</span>
-      <input id="m_brand" value="Fancy Feast" /></label>
-    <label class="field"><span>Flavor / name</span>
-      <input id="m_name" placeholder="e.g. Classic Pâté — Trout" /></label>
+    <h2>Add a food</h2>
+    ${foodFieldsHtml('m', { brand: guess.brand || 'Fancy Feast', line: guess.line || '', flavor: guess.flavor || '' })}
     <div class="btn-row">
       <button class="primary-btn" id="m_save">Add food</button>
       <button class="ghost-btn" id="m_cancel">Cancel</button>
     </div>`);
+  wireFoodFields('m');
   $('#m_cancel').addEventListener('click', closeModal);
   $('#m_save').addEventListener('click', async () => {
-    const brand = $('#m_brand').value.trim();
-    const name = $('#m_name').value.trim();
-    if (!name) { $('#m_name').focus(); return; }
-    await store.addCustomFood({ brand, name });
-    state.catalog = await getFoodCatalog();
+    const food = readFoodFields('m');
+    if (!food) { $('#m_flavor').focus(); return; }
+    const hit = await ensureFood(food);
     renderFoodSelect();
-    const idx = state.catalog.findIndex(f => f.name === name && (f.brand || '') === brand);
-    if (idx >= 0) $('#foodSelect').value = String(idx);
+    entryPicker?.select(hit);
     closeModal();
   });
 }
@@ -583,100 +787,114 @@ function openScanModal() {
   );
 }
 
-// A scanned/entered code arrives here. Known code → select instantly.
-// Unknown → ask which food it is (teach-once), pre-filled via Open Food Facts.
-async function resolveBarcode(code) {
-  stopScan();
-  const match = state.barcodes.find(b => b.code === code);
-  if (match) {
-    await selectFoodByLabel(match.food_label, match.food_brand, match.food_name);
-    closeModal();
-    toast(`✓ Recognized: ${match.food_label}`);
-    return;
-  }
-  const status = $('#scanStatus');
-  if (status) { status.textContent = 'New can — looking it up…'; status.style.color = ''; }
-  let guess = null;
-  try { guess = await lookupProduct(code); } catch { /* offline / not found */ }
-  openLinkBarcodeModal(code, guess);
+// UPC-A (12 digits) and EAN-13 (13, leading 0) are the same can.
+function sameCode(a, b) {
+  const n = (c) => String(c).replace(/\D/g, '').replace(/^0+/, '');
+  return n(a) === n(b);
 }
 
-function openLinkBarcodeModal(code, guess) {
-  const opts = state.catalog
-    .map((f, i) => `<option value="${i}">${escapeHtml(foodLabel(f))}</option>`)
-    .join('');
+// A scanned/entered code arrives here. Known code → select instantly.
+// Unknown → look it up online and pre-fill brand / line / flavor to confirm.
+async function resolveBarcode(code) {
+  stopScan();
+  code = String(code).trim();
+  const match = state.barcodes.find(b => sameCode(b.code, code));
+  if (match) {
+    const food = await ensureFood(normalizeFood({ brand: match.food_brand, name: match.food_name }));
+    renderFoodSelect();
+    entryPicker?.select(food);
+    closeModal();
+    toast(`✓ Recognized: ${groupLabel(food)} — ${splitName(food.name).flavor}`);
+    return;
+  }
+  openLinkBarcodeModal(code);
+}
+
+function openLinkBarcodeModal(code) {
   openModal(`
     <h2>New can scanned 📷</h2>
-    <p class="muted">Barcode <code>${escapeHtml(code)}</code>${guess ? ` · looks like <strong>${escapeHtml(guess.label)}</strong>` : ''}</p>
-    <p class="muted">Tell me which food this is — I'll remember it next time.</p>
-    <label class="field"><span>Pick an existing food</span>
-      <select id="lb_food"><option value="" selected>— or add a new one below —</option>${opts}</select>
-    </label>
-    <label class="field"><span>New food · brand</span>
-      <input id="lb_brand" value="${escapeAttr(guess?.brand || 'Fancy Feast')}" />
-    </label>
-    <label class="field"><span>New food · flavor / name</span>
-      <input id="lb_name" value="${escapeAttr(guess?.name || '')}" placeholder="e.g. Classic Pâté — Chicken" />
-    </label>
+    <p class="muted">Barcode <code>${escapeHtml(code)}</code></p>
+    <div class="lookup-status" id="lb_status">🔎 Looking up this can…</div>
+    ${foodFieldsHtml('lb', { brand: '', line: '', flavor: '' })}
+    <details class="manual" id="lb_pickWrap">
+      <summary>Or pick a food already in your list</summary>
+      <div id="lb_picker" style="margin-top:8px"></div>
+    </details>
+    <p class="muted">Check the name, then save — next time this can is recognized instantly.</p>
     <div class="btn-row">
       <button type="button" class="primary-btn" id="lb_save">Save &amp; use</button>
       <button type="button" class="ghost-btn" id="lb_cancel">Cancel</button>
     </div>
   `);
+  const fields = wireFoodFields('lb');
+  const setFields = ({ brand, line, flavor }) => {
+    $('#lb_brand').value = brand || '';
+    $('#lb_line').value = line || '';
+    $('#lb_flavor').value = flavor || '';
+    fields.refreshLines();
+    fields.preview();
+  };
+
+  // Picking an existing food just fills the fields, so there's one source of truth.
+  mountFoodPicker($('#lb_picker'), {
+    compact: true,
+    onPick: (f) => {
+      const { line, flavor } = splitName(f.name);
+      setFields({ brand: f.brand, line, flavor });
+      $('#lb_pickWrap').removeAttribute('open');
+    },
+  });
+
+  lookupProduct(code).then((hit) => {
+    const status = $('#lb_status');
+    if (!status) return; // modal closed meanwhile
+    if (hit) {
+      status.innerHTML = `✨ Found online: <em>${escapeHtml(hit.title)}</em>`;
+      status.classList.add('found');
+      // Fill only fields the person hasn't started typing in.
+      if (!$('#lb_flavor').value) setFields(hit);
+    } else {
+      status.textContent = "Couldn't find this barcode online — type the name below.";
+      if (!$('#lb_brand').value) setFields({ brand: 'Fancy Feast' });
+    }
+  });
 
   $('#lb_cancel').addEventListener('click', closeModal);
   $('#lb_save').addEventListener('click', async () => {
-    const pickedIdx = $('#lb_food').value;
-    let brand, name, label;
-    if (pickedIdx !== '') {
-      const f = state.catalog[pickedIdx];
-      brand = f.brand || ''; name = f.name; label = foodLabel(f);
-    } else {
-      name = $('#lb_name').value.trim();
-      if (!name) { $('#lb_name').focus(); return; }
-      brand = $('#lb_brand').value.trim();
-      label = brand ? `${brand} — ${name}` : name;
-      await store.addCustomFood({ brand, name });
-    }
-    await store.addBarcode({ code, food_brand: brand, food_name: name, food_label: label });
+    const food = readFoodFields('lb');
+    if (!food) { $('#lb_flavor').focus(); return; }
+    const hit = await ensureFood(food);
+    await store.addBarcode({ code, food_brand: hit.brand, food_name: hit.name, food_label: foodLabel(hit) });
     state.barcodes = await store.getBarcodes();
-    state.catalog = await getFoodCatalog();
     renderFoodSelect();
-    await selectFoodByLabel(label, brand, name);
+    entryPicker?.select(hit);
     closeModal();
-    toast(`✓ Linked & selected: ${label}`);
+    toast(`✓ Saved: ${groupLabel(hit)} — ${splitName(hit.name).flavor}`);
   });
 }
 
-// Select a food in the dropdown by its label, adding it to the catalog if it
-// isn't there (e.g. a custom food that was later removed).
-async function selectFoodByLabel(label, brand, name) {
-  const find = () => state.catalog.findIndex(f => foodLabel(f).toLowerCase() === label.toLowerCase());
-  let idx = find();
-  if (idx < 0) {
-    await store.addCustomFood({ brand: brand || '', name: name || label });
-    state.catalog = await getFoodCatalog();
-    renderFoodSelect();
-    idx = find();
-  }
-  if (idx >= 0) $('#foodSelect').value = String(idx);
-}
-
-// Best-effort product name from the free, key-less, CORS-friendly Open *Pet*
-// Food Facts database (the pet-food sibling of Open Food Facts), falling back
-// to the regular human-food DB. Coverage is partial — teach-once covers the
-// rest. For fuller coverage you'd add a server-side proxy to a commercial API
-// like UPCitemdb (CORS-locked, needs a key), e.g. a Supabase Edge Function.
+// Look up a barcode online and parse the product title into
+// { brand, line, flavor, title }. Tries, in order:
+//   1. UPCitemdb via our `upc-lookup` Edge Function (best coverage for US
+//      grocery; needs the server hop because it blocks browser calls)
+//   2. Open Pet Food Facts, then Open Food Facts (free, called directly)
 async function lookupProduct(code) {
-  const hosts = [
-    'https://world.openpetfoodfacts.org', // pet food first
-    'https://world.openfoodfacts.org',    // then human-food DB
+  const attempts = [
+    async () => {
+      const r = await store.lookupUpc(code);
+      return r && { title: r.title, brand: r.brand };
+    },
+    () => fetchProductFacts('https://world.openpetfoodfacts.org', code),
+    () => fetchProductFacts('https://world.openfoodfacts.org', code),
   ];
-  for (const host of hosts) {
+  for (const attempt of attempts) {
     try {
-      const hit = await fetchProductFacts(host, code);
-      if (hit) return hit;
-    } catch { /* try the next source */ }
+      const r = await attempt();
+      if (r?.title) {
+        const parsed = parseProductTitle(r.title, r.brand);
+        if (parsed.flavor) return { ...parsed, title: r.title };
+      }
+    } catch { /* offline / not found — try the next source */ }
   }
   return null;
 }
@@ -694,8 +912,8 @@ async function fetchProductFacts(host, code) {
     if (data.status === 0 || !data.product) return null;
     const name = (data.product.product_name || '').trim();
     const brand = (data.product.brands || '').split(',')[0].trim();
-    if (!name && !brand) return null;
-    return { name, brand, label: [brand, name].filter(Boolean).join(' — ') };
+    if (!name) return null;
+    return { title: name.toLowerCase().includes(brand.toLowerCase()) ? name : `${brand} ${name}`, brand };
   } finally {
     clearTimeout(t);
   }

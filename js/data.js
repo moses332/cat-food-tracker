@@ -18,8 +18,9 @@ export function reactionScore(value) {
   return r ? r.score : null;
 }
 
-// Starter catalog scoped to Fancy Feast, since that's all she eats today.
-// Users can add custom foods, and brand is editable for future flexibility.
+// Starter catalog scoped to Fancy Feast, since that's what she mostly eats.
+// Names follow the house style in foods.js: brand = maker only,
+// name = "Line — Flavor". The picker sorts these, so order here doesn't matter.
 export const STARTER_FOODS = [
   // Classic Pâté
   { brand: 'Fancy Feast', name: 'Classic Pâté — Chicken' },
@@ -28,17 +29,17 @@ export const STARTER_FOODS = [
   { brand: 'Fancy Feast', name: 'Classic Pâté — Savory Salmon' },
   { brand: 'Fancy Feast', name: 'Classic Pâté — Tender Beef' },
   { brand: 'Fancy Feast', name: 'Classic Pâté — Tender Liver & Chicken' },
-  { brand: 'Fancy Feast', name: 'Classic Pâté — Seafood Feast' },
+  { brand: 'Fancy Feast', name: 'Classic Pâté — Seafood' },
   { brand: 'Fancy Feast', name: 'Classic Pâté — Cod, Sole & Shrimp' },
   { brand: 'Fancy Feast', name: 'Classic Pâté — Salmon & Shrimp' },
   { brand: 'Fancy Feast', name: 'Classic Pâté — Chopped Grill' },
   // Grilled (gravy)
-  { brand: 'Fancy Feast', name: 'Grilled — Chicken in Gravy' },
-  { brand: 'Fancy Feast', name: 'Grilled — Turkey in Gravy' },
-  { brand: 'Fancy Feast', name: 'Grilled — Beef in Gravy' },
-  { brand: 'Fancy Feast', name: 'Grilled — Salmon in Gravy' },
-  { brand: 'Fancy Feast', name: 'Grilled — Ocean Whitefish & Tuna in Gravy' },
-  { brand: 'Fancy Feast', name: 'Grilled — Seafood Feast in Gravy' },
+  { brand: 'Fancy Feast', name: 'Grilled — Chicken' },
+  { brand: 'Fancy Feast', name: 'Grilled — Turkey' },
+  { brand: 'Fancy Feast', name: 'Grilled — Beef' },
+  { brand: 'Fancy Feast', name: 'Grilled — Salmon' },
+  { brand: 'Fancy Feast', name: 'Grilled — Ocean Whitefish & Tuna' },
+  { brand: 'Fancy Feast', name: 'Grilled — Seafood' },
   // Flaked / Chunky
   { brand: 'Fancy Feast', name: 'Flaked — Fish & Shrimp' },
   { brand: 'Fancy Feast', name: 'Flaked — Tuna' },
@@ -55,6 +56,8 @@ export const STARTER_FOODS = [
   { brand: 'Fancy Feast', name: 'Medleys — Tuscany Chicken' },
 ];
 
+// Full display label, e.g. "Fancy Feast — Gravy Lovers — Salmon". Stored on
+// each entry as food_label, which the leaderboard groups by.
 export function foodLabel(food) {
   if (!food) return '';
   return food.brand ? `${food.brand} — ${food.name}` : food.name;

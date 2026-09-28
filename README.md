@@ -4,11 +4,13 @@ A tiny web app to track which cans your picky cat actually likes. Works on any
 phone (iPhone + Android) through the browser — no app store needed. You can
 "Add to Home Screen" to make it feel like a real app.
 
-- **Food dropdown** scoped to Fancy Feast cans, with custom foods allowed
+- **Searchable food list** — type "salmon pâté" to filter; recently-fed foods first,
+  everything else grouped by brand · product line
 - **Initial reaction** vs **long-term reaction** on a 5-point scale
 - **Time fed** defaults to now, editable for delayed entries
-- **Barcode scanning** — point your phone camera at a can to pick the food
-  (teach each can once, then it's recognized instantly forever)
+- **Barcode scanning** — point your phone camera at a can to pick the food. New cans
+  are looked up online (UPCitemdb / Open Food Facts) and the brand, line and flavor
+  are filled in for you; after that it's recognized instantly
 - **Pet profiles** so it works for more pets / other people later
 - **Insights**: acceptance rate, avg reaction, weekly trend, and a food
   leaderboard that flags foods she loves at first but cools on (the "drift" column)
@@ -136,6 +138,7 @@ index.html              app shell + tabs
 css/styles.css          styling (mobile-first)
 js/config.js            ← your Supabase keys go here
 js/data.js              reaction scale + Fancy Feast starter catalog
+js/foods.js             food naming rules, title parsing, sort + search
 js/store.js             data layer (local ⇄ Supabase, same API)
 js/insights.js          KPI / trend calculations
 js/scanner.js           camera barcode scanning (native + ZXing fallback)

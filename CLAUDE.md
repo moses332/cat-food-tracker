@@ -21,11 +21,13 @@ help.html             sitter-facing how-to page (linked from login + Pets tab)
 css/styles.css        all styling (mobile-first)
 js/config.js          Supabase URL + publishable key (blank = local mode)
 js/data.js            reaction scale (5 levels) + Fancy Feast starter catalog
+js/foods.js           food naming rules (normalize, parse retailer titles), sort + search
 js/store.js           data layer: local (localStorage) ⇄ Supabase, same API + auth methods
 js/insights.js        KPI / leaderboard / trend calculations (pure functions)
 js/scanner.js         barcode scanning (native BarcodeDetector + ZXing CDN fallback)
 js/app.js             UI controller: rendering, events, auth gate, modals
 scripts/serve.ps1     local dev server (PowerShell HttpListener)
+supabase/functions/upc-lookup/  Edge Function: barcode → product title (UPCitemdb, Open Food Facts)
 .claude/launch.json   preview config (server name "picky-paws")
 ```
 
@@ -57,6 +59,20 @@ Notes:
 - There is **one rating per feeding**, stored in the legacy `initial_reaction` column
   (`longterm_reaction` is unused; kept for back-compat). Don't reintroduce a second rating.
 - `created_by_name` / `edited_by_name` power the "by X · edited by Y" byline in History.
+
+## Food naming convention
+Every food is stored as `brand` = maker only ("Fancy Feast") and `name` = `"Line — Flavor"`
+(em dash, `&` not "and", no trailing "Feast", no "in Gravy" for gravy lines). `normalizeFood()` in
+`js/foods.js` enforces this for anything typed or scanned; add new product lines to `LINES` there.
+The picker (`mountFoodPicker` in app.js) is search-as-you-type, grouped Brand · Line, with
+"Recently fed" first. Picker selection is by `foodKey()`, never by catalog index.
+
+## Barcode lookup
+Unknown barcode → `lookupProduct()` → `store.lookupUpc()` calls the `upc-lookup` Edge Function
+(UPCitemdb free trial, ~100/day, then Open Pet Food Facts / Open Food Facts), then falls back to
+calling Open Food Facts from the browser. `parseProductTitle()` turns the retailer title into
+brand/line/flavor to pre-fill the form. The function checks sign-in itself, so it's deployed with
+`verify_jwt: false` (`supabase functions deploy upc-lookup --no-verify-jwt`).
 
 ## Auth (shared mode)
 - **Passwordless email OTP, invite-only.** `store.sendCode(email)` (shouldCreateUser:false) →

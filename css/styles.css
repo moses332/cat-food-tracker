@@ -454,3 +454,104 @@ code {
 
 /* Attribution line on a history entry */
 .entry .byline { font-size: 11px; color: var(--muted); margin-top: 5px; font-style: italic; }
+
+/* ── Food picker (search-as-you-type) ── */
+.picker [hidden] { display: none !important; }
+.picker-input { width: 100%; }
+.picker-list {
+  margin-top: 8px;
+  max-height: 290px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.picker.compact .picker-list { max-height: 220px; }
+.picker-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 12px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.picker-item:last-of-type { border-bottom: none; }
+.picker-item:active, .picker-item:hover { background: var(--brand-soft); }
+.picker-item .pi-name { min-width: 0; }
+.picker-item .pi-name small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.picker-item .pi-meta { flex-shrink: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.picker-empty { padding: 14px 12px; font-size: 14px; color: var(--muted); }
+.picker-add {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand);
+  text-align: left;
+  cursor: pointer;
+}
+.picker-chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--brand);
+  border-radius: 12px;
+  background: var(--brand-soft);
+}
+.picker-chosen .pc-name { font-weight: 700; font-size: 15px; }
+.picker-chosen .pc-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.link-btn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 6px 2px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+/* ── New-can lookup ── */
+.lookup-status {
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.lookup-status.found { background: #e8f7ef; }
+.lookup-status em { font-style: normal; color: var(--muted); }
+.food-fields .field { margin-bottom: 12px; }
+.food-preview { margin: -2px 0 12px; }
