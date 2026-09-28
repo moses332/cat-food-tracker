@@ -56,6 +56,9 @@ test, then **restore the keys before committing**. Verify `git status` shows con
 - `barcodes` (id, code UNIQUE, food_brand, food_name, food_label) — teach-once UPC→food map
 
 Notes:
+- Ratings are stored as words (`loved`/`ate`/`picky`/`nibbled`/`refused`); the **1–5** numeric
+  scale lives only in `REACTIONS` in `js/data.js` (`SCORE_MIN`/`SCORE_MAX`), so it can change without
+  touching data.
 - There is **one rating per feeding**, stored in the legacy `initial_reaction` column
   (`longterm_reaction` is unused; kept for back-compat). Don't reintroduce a second rating.
 - `created_by_name` / `edited_by_name` power the "by X · edited by Y" byline in History.

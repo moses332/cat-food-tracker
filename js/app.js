@@ -2,7 +2,7 @@
 // `store`, all number-crunching through `insights`.
 
 import { store, initStore, getFoodCatalog, syncMode } from './store.js';
-import { REACTIONS, REACTION_BY_VALUE, foodLabel } from './data.js';
+import { REACTIONS, REACTION_BY_VALUE, foodLabel, SCORE_MAX } from './data.js';
 import * as insights from './insights.js';
 import { startScan, stopScan } from './scanner.js';
 import {
@@ -545,7 +545,7 @@ function renderInsights() {
   $('#kpiGrid').innerHTML = [
     kpi(s.total, 'Feedings logged'),
     kpi(s.acceptanceRate == null ? '—' : pct(s.acceptanceRate), 'Acceptance rate'),
-    kpi(s.avgInitialScore == null ? '—' : s.avgInitialScore.toFixed(1) + '/4', 'Avg rating'),
+    kpi(s.avgInitialScore == null ? '—' : s.avgInitialScore.toFixed(1) + '/' + SCORE_MAX, 'Avg rating'),
     kpi(s.lastFed ? fmtRelative(s.lastFed) : '—', 'Last fed'),
   ].join('');
 
@@ -656,7 +656,7 @@ function prefRow(f, i) {
     <div>${foodNameHtml(f)}
       <div class="lb-sub">${f.count} feeding${f.count === 1 ? '' : 's'}${f.acceptance != null ? ' · ' + pct(f.acceptance) + ' accepted' : ''}</div>
     </div>
-    <div class="lb-stat" title="Average rating (0–4)">${f.avgInitial.toFixed(1)}<span class="lb-unit">/4</span></div>
+    <div class="lb-stat" title="Average rating (1–${SCORE_MAX})">${f.avgInitial.toFixed(1)}<span class="lb-unit">/${SCORE_MAX}</span></div>
   </div>`;
 }
 

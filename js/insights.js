@@ -1,7 +1,7 @@
 // Pure functions that turn a list of feeding entries into KPIs and trends.
 // Kept separate from the UI so it's easy to reason about and tweak.
 
-import { REACTION_BY_VALUE, reactionScore, foodLabel } from './data.js';
+import { REACTION_BY_VALUE, reactionScore, foodLabel, SCORE_MIN, SCORE_MAX } from './data.js';
 
 // "Acceptance" = did she actually eat it? We treat picky-or-better as accepted.
 const ACCEPTED = new Set(['loved', 'ate', 'picky']);
@@ -74,7 +74,7 @@ export function inWindow(entries, windowValue, now = Date.now()) {
 // food she's loved ten times. The displayed number is still the plain average.
 const PRIOR_WEIGHT = 2;
 export function preferenceBoard(entries) {
-  const overall = avg(entries.map(e => reactionScore(e.initial_reaction)).filter(n => n != null)) ?? 2;
+  const overall = avg(entries.map(e => reactionScore(e.initial_reaction)).filter(n => n != null)) ?? MID;
   return perFood(entries)
     .filter(f => f.avgInitial != null)
     .map(f => ({ ...f, rank: (f.avgInitial * f.rated + overall * PRIOR_WEIGHT) / (f.rated + PRIOR_WEIGHT) }))
@@ -98,7 +98,7 @@ export function frequencyBoard(entries) {
 export function suggestions(entries, { now = Date.now(), skipDays = 2, limit = 10 } = {}) {
   const HALF_LIFE = 30, VARIETY_MAX = 0.3, VARIETY_DAYS = 14;
   const rated = entries.filter(e => reactionScore(e.initial_reaction) != null);
-  const overall = avg(rated.map(e => reactionScore(e.initial_reaction))) ?? 2;
+  const overall = avg(rated.map(e => reactionScore(e.initial_reaction))) ?? MID;
 
   const foods = new Map();
   for (const e of entries) {
@@ -159,6 +159,7 @@ export function acceptanceTrend(entries) {
 
 // ── helpers ──
 const DAY = 86400000;
+const MID = (SCORE_MIN + SCORE_MAX) / 2; // neutral rating when there's no data yet
 function entryKey(e) {
   return e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name });
 }

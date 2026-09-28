@@ -2,14 +2,18 @@
 // Custom foods entered by users are stored separately (see store.js).
 
 // Reaction scale, shared by both "initial" and "long-term" reactions.
-// `score` powers KPIs/trends (higher = she liked it more).
+// `score` powers KPIs/trends on a 1–5 scale (higher = she liked it more).
+// Entries store the `value` word, not the number, so the scale can change freely.
 export const REACTIONS = [
-  { value: 'loved',    label: 'Loved it',  emoji: '😻', score: 4, hint: 'Devoured it, wanted more' },
-  { value: 'ate',      label: 'Ate it',    emoji: '🙂', score: 3, hint: 'Finished, no fuss' },
-  { value: 'picky',    label: 'Picky',     emoji: '😐', score: 2, hint: 'Ate some, left the rest' },
-  { value: 'nibbled',  label: 'Nibbled',   emoji: '😾', score: 1, hint: 'A bite or two, then done' },
-  { value: 'refused',  label: 'Refused',   emoji: '🙅', score: 0, hint: 'Walked away, ate nothing' },
+  { value: 'loved',    label: 'Loved it',  emoji: '😻', score: 5, hint: 'Devoured it, wanted more' },
+  { value: 'ate',      label: 'Ate it',    emoji: '🙂', score: 4, hint: 'Finished, no fuss' },
+  { value: 'picky',    label: 'Picky',     emoji: '😐', score: 3, hint: 'Ate some, left the rest' },
+  { value: 'nibbled',  label: 'Nibbled',   emoji: '😾', score: 2, hint: 'A bite or two, then done' },
+  { value: 'refused',  label: 'Refused',   emoji: '🙅', score: 1, hint: 'Walked away, ate nothing' },
 ];
+
+export const SCORE_MIN = 1;
+export const SCORE_MAX = 5;
 
 export const REACTION_BY_VALUE = Object.fromEntries(REACTIONS.map(r => [r.value, r]));
 
