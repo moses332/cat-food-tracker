@@ -21,6 +21,8 @@ const state = {
   barcodes: [],
   lastAddedId: null, // entry to highlight after a save
   user: null,        // signed-in user (shared mode only)
+  prefWindow: 'month', // Favorites leaderboard window
+  freqWindow: 'month', // Most-fed leaderboard window
 };
 
 let entryPicker = null; // food picker inside the New feeding form
@@ -228,13 +230,14 @@ async function signOut() {
 
 // ── New-feeding modal ─────────────────────────────────────────────────────────
 function wireHistoryTab() {
-  $('#newEntryBtn').addEventListener('click', openEntryModal);
+  $('#newEntryBtn').addEventListener('click', () => openEntryModal());
   $('#entryBackdrop').addEventListener('click', (e) => {
     if (e.target.id === 'entryBackdrop') closeEntryModal();
   });
 }
 
-function openEntryModal() {
+// `preselect` (optional): a { brand, name } food to start with, e.g. from a suggestion.
+async function openEntryModal(preselect) {
   if (!state.activePetId) {
     toast('Add a pet first (🐾 Pets tab).', true);
     return;
@@ -273,6 +276,10 @@ function openEntryModal() {
   entryPicker = mountFoodPicker($('#foodPicker'), {
     onAddNew: (query) => openAddFoodModal(query),
   });
+  if (preselect?.name) {
+    const food = await ensureFood(normalizeFood(preselect));
+    entryPicker?.select(food);
+  }
   $('#fedAt').value = toLocalInput(new Date());
 
   $('#entryClose').addEventListener('click', closeEntryModal);
@@ -558,11 +565,121 @@ function renderInsights() {
     ? spark(trend)
     : emptyNote('Trends appear once you have feedings across a couple of weeks.');
 
-  // Leaderboard
-  const foods = insights.perFood(e);
-  $('#leaderboard').innerHTML = foods.length
-    ? foods.map(leaderboardRow).join('')
-    : emptyNote('No foods rated yet.');
+  renderSuggestions();
+  renderPreferenceBoard();
+  renderFrequencyBoard();
+}
+
+// ── Suggestions / leaderboards ───────────────────────────────────────────────
+const BOARD_TOP = 10;
+
+function renderSuggestions() {
+  const list = insights.suggestions(state.entries, { skipDays: 2, limit: 10 });
+  const host = $('#suggestions');
+  if (!list.length) {
+    host.innerHTML = emptyNote(state.entries.length
+      ? "Nothing to suggest — she's had everything in the last 2 days."
+      : 'Suggestions appear once you have a few feedings logged.');
+    return;
+  }
+  host.innerHTML = list.map((s, i) => {
+    const r = s.recentAvg == null ? null : REACTIONS.find(x => x.score === Math.round(s.recentAvg));
+    const avg = s.recentAvg == null ? 'not rated' : `${r?.emoji || ''} ${s.recentAvg.toFixed(1)} avg`;
+    return `<button type="button" class="lb-row suggest-row" data-i="${i}">
+      <span class="lb-rank">${i + 1}</span>
+      <div>${foodNameHtml(s)}
+        <div class="lb-sub">${avg} · last had ${agoDays(s.daysSince)}</div>
+      </div>
+      <span class="suggest-go">Log ›</span>
+    </button>`;
+  }).join('');
+  $$('.suggest-row', host).forEach(btn => btn.addEventListener('click', () => {
+    const s = list[Number(btn.dataset.i)];
+    openEntryModal({ brand: s.brand, name: s.name });
+  }));
+}
+
+function renderPreferenceBoard() {
+  renderWindowSeg('#prefWindow', 'prefWindow', renderPreferenceBoard);
+  const rows = insights.preferenceBoard(insights.inWindow(state.entries, state.prefWindow));
+  renderBoard('#leaderboard', rows, prefRow, {
+    title: '🏆 Favorites', windowKey: 'prefWindow', empty: 'No rated feedings',
+  });
+}
+
+function renderFrequencyBoard() {
+  renderWindowSeg('#freqWindow', 'freqWindow', renderFrequencyBoard);
+  const rows = insights.frequencyBoard(insights.inWindow(state.entries, state.freqWindow));
+  renderBoard('#freqBoard', rows, freqRow, {
+    title: '🔁 Most fed', windowKey: 'freqWindow', empty: 'No feedings',
+  });
+}
+
+// Top 10 inline + "See all" → full list in a pop-up.
+function renderBoard(sel, rows, rowFn, { title, windowKey, empty }) {
+  const host = $(sel);
+  const w = insights.WINDOWS.find(x => x.value === state[windowKey]);
+  if (!rows.length) {
+    host.innerHTML = emptyNote(`${empty} ${w.days ? `in the last ${w.label.toLowerCase()}` : 'yet'}.`);
+    return;
+  }
+  host.innerHTML = rows.slice(0, BOARD_TOP).map(rowFn).join('') +
+    (rows.length > BOARD_TOP
+      ? `<button type="button" class="ghost-btn see-all">See all ${rows.length} →</button>` : '');
+  $('.see-all', host)?.addEventListener('click', () => {
+    openModal(`
+      <div class="modal-head">
+        <h2>${title}</h2>
+        <button type="button" class="icon-btn close-x" id="m_close" title="Close">✕</button>
+      </div>
+      <p class="muted">${w.days ? `Last ${w.label.toLowerCase()}` : 'All time'} · ${rows.length} foods</p>
+      <div>${rows.map(rowFn).join('')}</div>`);
+    $('#m_close').addEventListener('click', closeModal);
+  });
+}
+
+function renderWindowSeg(sel, key, rerender) {
+  const host = $(sel);
+  host.innerHTML = insights.WINDOWS.map(w =>
+    `<button type="button" data-w="${w.value}" class="${state[key] === w.value ? 'on' : ''}"
+       aria-pressed="${state[key] === w.value}">${w.value === '3mo' ? '3 mo' : w.label}</button>`
+  ).join('');
+  $$('button', host).forEach(b => b.addEventListener('click', () => {
+    state[key] = b.dataset.w;
+    rerender();
+  }));
+}
+
+function prefRow(f, i) {
+  return `<div class="lb-row">
+    <span class="lb-rank">${i + 1}</span>
+    <div>${foodNameHtml(f)}
+      <div class="lb-sub">${f.count} feeding${f.count === 1 ? '' : 's'}${f.acceptance != null ? ' · ' + pct(f.acceptance) + ' accepted' : ''}</div>
+    </div>
+    <div class="lb-stat" title="Average rating (0–4)">${f.avgInitial.toFixed(1)}<span class="lb-unit">/4</span></div>
+  </div>`;
+}
+
+function freqRow(f, i) {
+  return `<div class="lb-row">
+    <span class="lb-rank">${i + 1}</span>
+    <div>${foodNameHtml(f)}
+      <div class="lb-sub">${pct(f.share)} of feedings · last ${fmtRelative(f.lastFed)}</div>
+    </div>
+    <div class="lb-stat">${f.count}<span class="lb-unit">×</span></div>
+  </div>`;
+}
+
+// "Salmon" over "Fancy Feast · Gravy Lovers"
+function foodNameHtml(f) {
+  const food = normalizeFood({ brand: f.brand || '', name: f.name || f.label });
+  return `<div class="lb-name">${escapeHtml(splitName(food.name).flavor)}</div>
+    <div class="lb-sub">${escapeHtml(groupLabel(food))}</div>`;
+}
+
+function agoDays(days) {
+  const d = Math.floor(days);
+  return d < 1 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
 }
 
 function kpi(value, label) {
@@ -586,17 +703,6 @@ function spark(trend) {
   return `<div class="spark">${cols}</div>
     <p class="muted" style="margin-top:8px">Each bar = one week's acceptance rate.</p>`;
 }
-function leaderboardRow(f) {
-  const avg = f.avgInitial == null ? '—' : f.avgInitial.toFixed(1);
-  return `<div class="lb-row">
-    <div>
-      <div class="lb-name">${escapeHtml(f.label)}</div>
-      <div class="lb-sub">${f.count} feeding${f.count === 1 ? '' : 's'}${f.acceptance != null ? ' · ' + pct(f.acceptance) + ' accepted' : ''}</div>
-    </div>
-    <div class="lb-stat" title="Average rating (0–4)">${avg}<span class="lb-unit">/4</span></div>
-  </div>`;
-}
-
 // ── Pets tab ─────────────────────────────────────────────────────────────────
 function wirePetsTab() {
   $('#addPetBtn').addEventListener('click', () => openPetModal());

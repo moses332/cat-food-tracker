@@ -36,9 +36,24 @@
     <!-- INSIGHTS tab -->
     <section class="tab" id="tab-insights" data-tab="insights" hidden>
       <div class="card">
-        <h2>🏆 Food leaderboard</h2>
-        <p class="muted">Her foods ranked by average rating — best-liked at the top.</p>
+        <h2>💡 Suggested next</h2>
+        <p class="muted">Foods she rates highly that she hasn't had in the last 2 days. Tap one to log it.</p>
+        <div id="suggestions"></div>
+      </div>
+      <div class="card">
+        <div class="board-head">
+          <h2>🏆 Favorites</h2>
+          <div class="seg" id="prefWindow" role="group" aria-label="Time window"></div>
+        </div>
+        <p class="muted">Ranked by her average rating. Foods tried only once or twice count a little less.</p>
         <div id="leaderboard"></div>
+      </div>
+      <div class="card">
+        <div class="board-head">
+          <h2>🔁 Most fed</h2>
+          <div class="seg" id="freqWindow" role="group" aria-label="Time window"></div>
+        </div>
+        <div id="freqBoard"></div>
       </div>
       <div class="kpi-grid" id="kpiGrid"></div>
       <div class="card">

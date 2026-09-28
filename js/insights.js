@@ -31,7 +31,7 @@ export function summarize(entries) {
 export function perFood(entries) {
   const groups = new Map();
   for (const e of entries) {
-    const key = e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name });
+    const key = entryKey(e);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(e);
   }
@@ -41,12 +41,92 @@ export function perFood(entries) {
     const ratings = list.map(e => reactionScore(e.initial_reaction)).filter(n => n != null);
     rows.push({
       label,
+      brand: list[0].food_brand,
+      name: list[0].food_name,
       count: list.length,
+      rated: ratings.length,
+      lastFed: list.reduce((m, e) => (e.fed_at > m ? e.fed_at : m), ''),
       avgInitial: avg(ratings),
       acceptance: rate(list.map(e => e.initial_reaction)),
     });
   }
   return rows.sort((a, b) => (b.avgInitial ?? -1) - (a.avgInitial ?? -1));
+}
+
+// ── Moving windows ─────────────────────────────────────────────────────────
+export const WINDOWS = [
+  { value: 'week',  label: 'Week',     days: 7 },
+  { value: 'month', label: 'Month',    days: 30 },
+  { value: '3mo',   label: '3 months', days: 90 },
+  { value: 'all',   label: 'All',      days: null },
+];
+
+export function inWindow(entries, windowValue, now = Date.now()) {
+  const w = WINDOWS.find(x => x.value === windowValue);
+  if (!w || w.days == null) return entries;
+  const since = now - w.days * DAY;
+  return entries.filter(e => new Date(e.fed_at).getTime() >= since);
+}
+
+// Preference leaderboard. Ranked by a "fair" score: each food's average
+// rating is blended with her overall average, weighted as if it had
+// PRIOR_WEIGHT extra feedings. So one lucky "Loved it" doesn't outrank a
+// food she's loved ten times. The displayed number is still the plain average.
+const PRIOR_WEIGHT = 2;
+export function preferenceBoard(entries) {
+  const overall = avg(entries.map(e => reactionScore(e.initial_reaction)).filter(n => n != null)) ?? 2;
+  return perFood(entries)
+    .filter(f => f.avgInitial != null)
+    .map(f => ({ ...f, rank: (f.avgInitial * f.rated + overall * PRIOR_WEIGHT) / (f.rated + PRIOR_WEIGHT) }))
+    .sort((a, b) => b.rank - a.rank || b.count - a.count);
+}
+
+// Most-fed leaderboard: count in the window, ties → most recently fed.
+export function frequencyBoard(entries) {
+  const total = entries.length;
+  return perFood(entries)
+    .map(f => ({ ...f, share: total ? f.count / total : 0 }))
+    .sort((a, b) => b.count - a.count || new Date(b.lastFed) - new Date(a.lastFed));
+}
+
+// Suggested next feeds: foods she's eaten before, not in the last
+// `skipDays`, ranked by how much she likes them lately plus a small nudge
+// for variety the longer it's been.
+//   liking  = her ratings, each weighted by recency (half-life 30 days),
+//             blended with her overall average (1 feeding's worth)
+//   variety = up to +0.3 for 14+ days since she last had it
+export function suggestions(entries, { now = Date.now(), skipDays = 2, limit = 10 } = {}) {
+  const HALF_LIFE = 30, VARIETY_MAX = 0.3, VARIETY_DAYS = 14;
+  const rated = entries.filter(e => reactionScore(e.initial_reaction) != null);
+  const overall = avg(rated.map(e => reactionScore(e.initial_reaction))) ?? 2;
+
+  const foods = new Map();
+  for (const e of entries) {
+    const key = entryKey(e);
+    const f = foods.get(key) || { label: key, brand: e.food_brand, name: e.food_name, last: 0, wSum: 0, wScore: 0, count: 0 };
+    const t = new Date(e.fed_at).getTime();
+    f.count++;
+    if (t > f.last) f.last = t;
+    const r = reactionScore(e.initial_reaction);
+    if (r != null) {
+      const w = Math.pow(0.5, Math.max(0, now - t) / DAY / HALF_LIFE);
+      f.wSum += w;
+      f.wScore += w * r;
+    }
+    foods.set(key, f);
+  }
+
+  return [...foods.values()]
+    .filter(f => now - f.last >= skipDays * DAY)
+    .map(f => {
+      const daysSince = (now - f.last) / DAY;
+      const liking = (f.wScore + overall) / (f.wSum + 1);
+      const variety = Math.min(daysSince, VARIETY_DAYS) / VARIETY_DAYS * VARIETY_MAX;
+      const recentAvg = f.wSum ? f.wScore / f.wSum : null;
+      return { ...f, daysSince, liking, recentAvg, score: liking + variety };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 // Counts of each reaction value, for a breakdown bar.
@@ -78,6 +158,10 @@ export function acceptanceTrend(entries) {
 }
 
 // ── helpers ──
+const DAY = 86400000;
+function entryKey(e) {
+  return e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name });
+}
 function avg(nums) {
   if (!nums.length) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;

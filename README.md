@@ -12,8 +12,9 @@ phone (iPhone + Android) through the browser — no app store needed. You can
   are looked up online (UPCitemdb / Open Food Facts) and the brand, line and flavor
   are filled in for you; after that it's recognized instantly
 - **Pet profiles** so it works for more pets / other people later
-- **Insights**: acceptance rate, avg reaction, weekly trend, and a food
-  leaderboard that flags foods she loves at first but cools on (the "drift" column)
+- **Insights**: suggested next feeds (liked, not had in 2 days), Favorites and
+  Most-fed leaderboards over a week / month / 3 months / all time, plus
+  acceptance rate, reaction mix and weekly trend
 
 ---
 

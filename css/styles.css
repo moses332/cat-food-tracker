@@ -555,3 +555,24 @@ code {
 .lookup-status em { font-style: normal; color: var(--muted); }
 .food-fields .field { margin-bottom: 12px; }
 .food-preview { margin: -2px 0 12px; }
+
+/* ── Insights: boards ── */
+.board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.board-head h2 { margin: 0; }
+.seg { display: inline-flex; background: var(--bg); border-radius: 999px; padding: 3px; }
+.seg button {
+  border: none; background: none; font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--muted); padding: 6px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.seg button.on { background: var(--card); color: var(--brand); box-shadow: 0 1px 3px rgba(60, 40, 120, 0.15); }
+.lb-row { grid-template-columns: 22px 1fr auto; }
+.lb-rank { font-size: 13px; font-weight: 700; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.lb-row .lb-sub + .lb-sub { margin-top: 2px; }
+.see-all { width: 100%; margin-top: 10px; }
+.suggest-row {
+  width: 100%; border: none; border-bottom: 1px solid var(--line); background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.suggest-row:last-child { border-bottom: none; }
+.suggest-row:active { background: var(--brand-soft); }
+.suggest-go { font-size: 13px; font-weight: 600; color: var(--brand); white-space: nowrap; }

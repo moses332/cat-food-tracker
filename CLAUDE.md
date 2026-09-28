@@ -74,6 +74,17 @@ calling Open Food Facts from the browser. `parseProductTitle()` turns the retail
 brand/line/flavor to pre-fill the form. The function checks sign-in itself, so it's deployed with
 `verify_jwt: false` (`supabase functions deploy upc-lookup --no-verify-jwt`).
 
+## Insights tab
+Order: Suggested next → Favorites → Most fed → KPIs / breakdown / trend (all-time).
+Logic lives in `js/insights.js`:
+- `inWindow(entries, 'week'|'month'|'3mo'|'all')` — boards default to `month` (`state.prefWindow`,
+  `state.freqWindow`); boards show top 10 + "See all" modal.
+- `preferenceBoard` ranks by average rating shrunk toward her overall average (`PRIOR_WEIGHT` = 2
+  phantom feedings) so one-off ratings don't dominate; displays the plain average.
+- `suggestions` = foods fed before, not in the last 2 days, scored by recency-weighted rating
+  (30-day half-life, shrunk toward overall avg) + up to +0.3 variety bonus for 14+ days since fed.
+  Tapping one calls `openEntryModal({ brand, name })` to preselect it.
+
 ## Auth (shared mode)
 - **Passwordless email OTP, invite-only.** `store.sendCode(email)` (shouldCreateUser:false) →
   `store.verifyCode(email, token)`. Login gate lives in `app.js` (`showLoginGate` et al.).
