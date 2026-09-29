@@ -758,15 +758,72 @@ function renderBoard(sel, rows, rowFn, { title, windowKey, empty }) {
   host.innerHTML = rows.slice(0, BOARD_TOP).map(rowFn).join('') +
     (rows.length > BOARD_TOP
       ? `<button type="button" class="ghost-btn see-all">See all ${rows.length} →</button>` : '');
+  wireFoodRows(host);
   $('.see-all', host)?.addEventListener('click', () => {
     openModal(`
       <div class="modal-head">
         <h2>${title}</h2>
         <button type="button" class="icon-btn close-x" id="m_close" title="Close">✕</button>
       </div>
-      <p class="muted">${w.days ? `Last ${w.label.toLowerCase()}` : 'All time'} · ${rows.length} foods</p>
-      <div>${rows.map(rowFn).join('')}</div>`);
+      <p class="muted">${w.days ? `Last ${w.label.toLowerCase()}` : 'All time'} · ${rows.length} foods · tap one for details</p>
+      <div id="boardAll">${rows.map(rowFn).join('')}</div>`);
     $('#m_close').addEventListener('click', closeModal);
+    wireFoodRows($('#boardAll'));
+  });
+}
+
+function wireFoodRows(host) {
+  $$('[data-food]', host).forEach(row =>
+    row.addEventListener('click', () => openFoodDetail(row.dataset.food)));
+}
+
+// Pop-up for one food: summary + her last 10 feedings of it.
+function openFoodDetail(label) {
+  const all = state.entries.filter(e =>
+    (e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name })) === label);
+  if (!all.length) return;
+  const first = all[0];
+  const food = normalizeFood({ brand: first.food_brand, name: first.food_name });
+  const rated = all.map(e => REACTION_BY_VALUE[e.initial_reaction]).filter(Boolean);
+  const avg = rated.length ? rated.reduce((a, r) => a + r.score, 0) / rated.length : null;
+  const accepted = all.filter(e => insights.isAccepted(e.initial_reaction)).length;
+  const recent = all.slice(0, 10); // entries are newest-first
+
+  openModal(`
+    <div class="modal-head">
+      <h2>${escapeHtml(splitName(food.name).flavor)}</h2>
+      <button type="button" class="icon-btn close-x" id="m_close" title="Close">✕</button>
+    </div>
+    <p class="muted" style="margin-top:0">${escapeHtml(groupLabel(food))}</p>
+    <div class="detail-stats">
+      <div><strong>${all.length}</strong><span>feeding${all.length === 1 ? '' : 's'}</span></div>
+      <div><strong>${avg == null ? '—' : avg.toFixed(1)}</strong><span>avg /${SCORE_MAX}</span></div>
+      <div><strong>${rated.length ? pct(accepted / rated.length) : '—'}</strong><span>accepted</span></div>
+      <div><strong>${fmtRelative(first.fed_at)}</strong><span>last fed</span></div>
+    </div>
+    <h3 class="detail-sub">${all.length > 10 ? 'Last 10 feedings' : 'Every feeding'}</h3>
+    <div class="detail-list">
+      ${recent.map(e => {
+        const r = REACTION_BY_VALUE[e.initial_reaction];
+        return `<div class="detail-row">
+          <span class="dr-emoji" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</span>
+          <div class="dr-body">
+            <div class="dr-when">${escapeHtml(fmtWhen(e.fed_at))}</div>
+            <div class="dr-sub">${r ? r.label : 'Not rated'}${e.created_by_name ? ' · by ' + escapeHtml(e.created_by_name) : ''}</div>
+            ${e.notes ? `<div class="dr-note">${escapeHtml(e.notes)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="btn-row">
+      <button type="button" class="primary-btn" id="d_log">＋ Log this food</button>
+      <button type="button" class="ghost-btn" id="d_close">Close</button>
+    </div>`);
+  $('#m_close').addEventListener('click', closeModal);
+  $('#d_close').addEventListener('click', closeModal);
+  $('#d_log').addEventListener('click', () => {
+    closeModal();
+    openEntryModal({ food: { brand: first.food_brand, name: first.food_name } });
   });
 }
 
@@ -783,7 +840,7 @@ function renderWindowSeg(sel, key, rerender) {
 }
 
 function prefRow(f, i) {
-  return `<div class="lb-row">
+  return `<div class="lb-row tappable" data-food="${escapeAttr(f.label)}">
     <span class="lb-rank">${i + 1}</span>
     <div>${foodNameHtml(f)}
       <div class="lb-sub">${f.count} feeding${f.count === 1 ? '' : 's'}${f.acceptance != null ? ' · ' + pct(f.acceptance) + ' accepted' : ''}</div>
@@ -793,7 +850,7 @@ function prefRow(f, i) {
 }
 
 function freqRow(f, i) {
-  return `<div class="lb-row">
+  return `<div class="lb-row tappable" data-food="${escapeAttr(f.label)}">
     <span class="lb-rank">${i + 1}</span>
     <div>${foodNameHtml(f)}
       <div class="lb-sub">${pct(f.share)} of feedings · last ${fmtRelative(f.lastFed)}</div>
@@ -883,8 +940,16 @@ async function deletePet(id) {
 }
 
 // ── Modals ───────────────────────────────────────────────────────────────────
+// Every pop-up gets a ✕ in the corner unless it brings its own close button.
 function openModal(html) {
-  $('#modalBox').innerHTML = html;
+  const box = $('#modalBox');
+  box.innerHTML = html;
+  if (!$('.close-x', box)) {
+    box.insertAdjacentHTML('afterbegin',
+      `<button type="button" class="icon-btn close-x modal-x" title="Close" aria-label="Close">✕</button>`);
+    $('.modal-x', box).addEventListener('click', closeModal);
+  }
+  box.scrollTop = 0;
   $('#modalBackdrop').hidden = false;
 }
 function closeModal() {

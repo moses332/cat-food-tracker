@@ -101,7 +101,12 @@ Logic lives in `js/insights.js`:
   phantom feedings) so one-off ratings don't dominate; displays the plain average.
 - `suggestions` = foods fed before, not in the last 2 days, scored by recency-weighted rating
   (30-day half-life, shrunk toward overall avg) + up to +0.3 variety bonus for 14+ days since fed.
-  Tapping one calls `openEntryModal({ brand, name })` to preselect it.
+  Tapping one calls `openEntryModal({ food: { brand, name } })` to preselect it.
+- Favorites / Most-fed rows (inline and in "See all") open `openFoodDetail(label)`: stats + last 10
+  feedings of that food + "Log this food".
+
+## Pop-ups
+`openModal(html)` auto-adds a ✕ (`.modal-x`) unless the content already has a `.close-x`.
 
 ## Auth (shared mode)
 - **Passwordless email OTP, invite-only.** `store.sendCode(email)` (shouldCreateUser:false) →
