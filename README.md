@@ -11,7 +11,7 @@ phone (iPhone + Android) through the browser — no app store needed. You can
 - **Barcode scanning** — point your phone camera at a can to pick the food. New cans
   are looked up online (UPCitemdb / Open Food Facts) and the brand, line and flavor
   are filled in for you; after that it's recognized instantly
-- **Pet profiles** so it works for more pets / other people later
+- **Pet profiles** with an optional photo (camera, gallery or Google Photos), shown in the header
 - **Insights**: suggested next feeds (liked, not had in 2 days), Favorites and
   Most-fed leaderboards over a week / month / 3 months / all time, plus
   acceptance rate, reaction mix and weekly trend

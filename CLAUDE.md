@@ -49,7 +49,8 @@ To test without touching real data: temporarily blank the two keys in `config.js
 test, then **restore the keys before committing**. Verify `git status` shows config.js unchanged.
 
 ## Data model (Supabase tables)
-- `pets` (id, name, species, notes, created_at)
+- `pets` (id, name, species, notes, **photo**, created_at) — `photo` is a small square JPEG data URL
+  (cropped/shrunk to 320 px in the browser by `squarePhoto()`; ~5–30 KB), shown in the header + Pets tab
 - `foods` (id, brand, name, created_at) — user-added custom foods; starters live in `data.js`
 - `entries` (id, pet_id, food_brand, food_name, food_label, **initial_reaction**, longterm_reaction,
   fed_at, notes, created_at, **created_by, created_by_name, edited_by_name, edited_at**)

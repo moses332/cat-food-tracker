@@ -91,18 +91,27 @@ function renderPetSwitcher() {
     return;
   }
   wrap.innerHTML = '';
+  const active = state.pets.find(p => p.id === state.activePetId);
+  if (active?.photo) {
+    const img = document.createElement('img');
+    img.className = 'pet-photo header-photo';
+    img.src = active.photo;
+    img.alt = active.name;
+    wrap.appendChild(img);
+  }
   const sel = document.createElement('select');
   sel.id = 'petSwitcher';
   for (const p of state.pets) {
     const o = document.createElement('option');
     o.value = p.id;
-    o.textContent = `${avatarFor(p)} ${p.name}`;
+    o.textContent = p.photo ? p.name : `${avatarFor(p)} ${p.name}`;
     if (p.id === state.activePetId) o.selected = true;
     sel.appendChild(o);
   }
   sel.addEventListener('change', async () => {
     state.activePetId = sel.value;
     state.entries = await store.getEntries(state.activePetId);
+    renderPetSwitcher(); // swap the header photo
     renderHistory();
     renderInsights();
     renderPetList();
@@ -844,7 +853,7 @@ function renderPetList() {
   }
   host.innerHTML = state.pets.map(p => `
     <div class="pet ${p.id === state.activePetId ? 'active' : ''}" data-id="${p.id}">
-      <span class="avatar">${avatarFor(p)}</span>
+      ${avatarHtml(p)}
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="meta">${escapeHtml(p.species || 'Pet')}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
@@ -1154,6 +1163,18 @@ function openPetModal(id) {
   const p = id ? state.pets.find(x => x.id === id) : null;
   openModal(`
     <h2>${p ? 'Edit pet' : 'Add a pet'}</h2>
+    <div class="field photo-field">
+      <span>Photo <small>(optional)</small></span>
+      <div class="photo-row">
+        <div class="photo-preview" id="m_photoPreview"></div>
+        <div class="photo-btns">
+          <label class="ghost-btn photo-pick">📷 Choose photo
+            <input type="file" id="m_photo" accept="image/*" hidden />
+          </label>
+          <button type="button" class="link-btn" id="m_photoRemove">Remove</button>
+        </div>
+      </div>
+    </div>
     <label class="field"><span>Name</span>
       <input id="m_name" value="${p ? escapeAttr(p.name) : ''}" placeholder="e.g. Mochi" /></label>
     <label class="field"><span>Species / type</span>
@@ -1164,6 +1185,29 @@ function openPetModal(id) {
       <button class="primary-btn" id="m_save">${p ? 'Save' : 'Add pet'}</button>
       <button class="ghost-btn" id="m_cancel">Cancel</button>
     </div>`);
+  // Photo: picked from camera / gallery / Google Photos via the OS picker,
+  // then cropped + shrunk in the browser before it's saved.
+  let photo = p?.photo || null;
+  const showPhoto = () => {
+    $('#m_photoPreview').innerHTML = photo
+      ? `<img class="pet-photo" src="${escapeAttr(photo)}" alt="" />`
+      : `<span class="photo-empty">${p ? avatarFor(p) : '🐱'}</span>`;
+    $('#m_photoRemove').hidden = !photo;
+  };
+  showPhoto();
+  $('#m_photo').addEventListener('change', async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    try {
+      photo = await squarePhoto(file, 320);
+      showPhoto();
+    } catch (err) {
+      toast("Couldn't read that photo — try another one.", true);
+    }
+  });
+  $('#m_photoRemove').addEventListener('click', () => { photo = null; showPhoto(); });
+
   $('#m_cancel').addEventListener('click', closeModal);
   $('#m_save').addEventListener('click', async () => {
     const name = $('#m_name').value.trim();
@@ -1172,6 +1216,7 @@ function openPetModal(id) {
       name,
       species: $('#m_species').value.trim() || 'Cat',
       notes: $('#m_notes').value.trim(),
+      photo,
     };
     if (p) await store.updatePet(id, payload);
     else {
@@ -1311,6 +1356,36 @@ function wireSwipe() {
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────
+// Round photo if the pet has one, otherwise the species emoji.
+function avatarHtml(p) {
+  return p.photo
+    ? `<img class="pet-photo avatar-photo" src="${escapeAttr(p.photo)}" alt="" />`
+    : `<span class="avatar">${avatarFor(p)}</span>`;
+}
+
+// Center-crop an image file to a square and shrink it to `size` px, returned
+// as a JPEG data URL (~20–30 KB). Honors phone photo rotation (EXIF).
+async function squarePhoto(file, size) {
+  let src;
+  try {
+    src = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    src = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  const w = src.width, h = src.height, side = Math.min(w, h);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, (w - side) / 2, (h - side) / 2, side, side, 0, 0, size, size);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 function avatarFor(p) {
   const s = (p.species || '').toLowerCase();
   if (s.includes('dog')) return '🐶';
