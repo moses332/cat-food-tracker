@@ -1158,15 +1158,65 @@ async function importData(ev) {
 }
 
 // ── Tab navigation ───────────────────────────────────────────────────────────
+const TAB_ORDER = ['history', 'insights', 'pets'];
+
 function wireTabs() {
   $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => goToTab(btn.dataset.go));
   });
+  wireSwipe();
 }
 
-function goToTab(go) {
+function currentTab() {
+  return $('.tab-btn.active')?.dataset.go || 'history';
+}
+
+// `dir` (optional): 'next' | 'prev' — slides the new tab in from that side.
+function goToTab(go, dir) {
   $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.go === go));
-  $$('.tab').forEach(t => { t.hidden = t.dataset.tab !== go; });
+  $$('.tab').forEach(t => {
+    t.hidden = t.dataset.tab !== go;
+    t.classList.remove('slide-next', 'slide-prev');
+    if (!t.hidden && dir) {
+      void t.offsetWidth; // restart the animation
+      t.classList.add(dir === 'next' ? 'slide-next' : 'slide-prev');
+    }
+  });
+}
+
+// Swipe left/right anywhere on the main screen to change tabs. Ignored while
+// a pop-up or the sign-in screen is open, for mostly-vertical drags (scrolling),
+// and for swipes starting at the screen edge (the phone's own "back" gesture).
+function wireSwipe() {
+  const EDGE = 24, MIN_DX = 60, MAX_MS = 700;
+  let start = null;
+  const blocked = () =>
+    !$('#modalBackdrop').hidden || !$('#entryBackdrop').hidden || !$('#authGate').hidden;
+
+  document.addEventListener('touchstart', (ev) => {
+    start = null;
+    if (ev.touches.length !== 1 || blocked()) return;
+    const t = ev.touches[0];
+    if (t.clientX < EDGE || t.clientX > window.innerWidth - EDGE) return;
+    if (ev.target.closest('input, textarea, select, .tab-bar')) return;
+    start = { x: t.clientX, y: t.clientY, at: Date.now() };
+  }, { passive: true });
+
+  document.addEventListener('touchend', (ev) => {
+    if (!start) return;
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    const quick = Date.now() - start.at < MAX_MS;
+    start = null;
+    if (!quick || Math.abs(dx) < MIN_DX || Math.abs(dx) < Math.abs(dy) * 1.5 || blocked()) return;
+    const i = TAB_ORDER.indexOf(currentTab());
+    const next = dx < 0 ? i + 1 : i - 1;
+    if (next < 0 || next >= TAB_ORDER.length) return;
+    goToTab(TAB_ORDER[next], dx < 0 ? 'next' : 'prev');
+    window.scrollTo({ top: 0 });
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', () => { start = null; }, { passive: true });
 }
 
 // ── Formatting helpers ───────────────────────────────────────────────────────

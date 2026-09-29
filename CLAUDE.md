@@ -82,6 +82,11 @@ Shows a moving window (`state.historyWindow`, default `week`, same `inWindow` / 
 as Insights) plus a "View full history" pop-up (`openFullHistory`). Rows come from `entryRowHtml`
 / `wireEntryRows`, shared by both.
 
+## Tab swipe
+`wireSwipe()` in app.js: horizontal swipe on the main screen moves through `TAB_ORDER`
+(history → insights → pets). Ignored while any modal / the auth gate is open, for mostly-vertical
+drags, slow drags (>700 ms), and touches starting within 24 px of the screen edge (OS back gesture).
+
 ## Insights tab
 Order: Suggested next → Favorites → Most fed → KPIs / breakdown / trend (all-time).
 Logic lives in `js/insights.js`:

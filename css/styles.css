@@ -73,6 +73,12 @@ body {
 main { padding: 16px; }
 .tab { animation: fade 0.18s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+/* Swipe between tabs: new tab slides in from the side it came from */
+.tab.slide-next { animation: slide-next 0.22s ease-out; }
+.tab.slide-prev { animation: slide-prev 0.22s ease-out; }
+@keyframes slide-next { from { opacity: 0.3; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes slide-prev { from { opacity: 0.3; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+main { overflow-x: clip; } /* hide the slide-in overhang without breaking the sticky header */
 
 .card {
   background: var(--card);
