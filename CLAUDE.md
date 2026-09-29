@@ -77,6 +77,11 @@ calling Open Food Facts from the browser. `parseProductTitle()` turns the retail
 brand/line/flavor to pre-fill the form. The function checks sign-in itself, so it's deployed with
 `verify_jwt: false` (`supabase functions deploy upc-lookup --no-verify-jwt`).
 
+## History tab
+Shows a moving window (`state.historyWindow`, default `week`, same `inWindow` / `renderWindowSeg`
+as Insights) plus a "View full history" pop-up (`openFullHistory`). Rows come from `entryRowHtml`
+/ `wireEntryRows`, shared by both.
+
 ## Insights tab
 Order: Suggested next → Favorites → Most fed → KPIs / breakdown / trend (all-time).
 Logic lives in `js/insights.js`:

@@ -576,3 +576,7 @@ code {
 .suggest-row:last-child { border-bottom: none; }
 .suggest-row:active { background: var(--brand-soft); }
 .suggest-go { font-size: 13px; font-weight: 600; color: var(--brand); white-space: nowrap; }
+
+/* ── History window ── */
+.history-window { margin: -4px 0 12px; }
+#fullHistoryList { margin-top: 8px; }

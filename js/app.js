@@ -21,6 +21,7 @@ const state = {
   barcodes: [],
   lastAddedId: null, // entry to highlight after a save
   user: null,        // signed-in user (shared mode only)
+  historyWindow: 'week', // History tab window
   prefWindow: 'month', // Favorites leaderboard window
   freqWindow: 'month', // Most-fed leaderboard window
 };
@@ -494,47 +495,80 @@ function toast(text, isError = false) {
 }
 
 // ── History ──────────────────────────────────────────────────────────────────
+// History shows a moving window (default: last week); "View full history"
+// opens everything in a pop-up.
 function renderHistory() {
+  renderWindowSeg('#historyWindow', 'historyWindow', renderHistory);
   const host = $('#historyList');
   if (!state.entries.length) {
     host.innerHTML = `<p class="empty">No feedings yet.<br>Tap <strong>＋ New feeding</strong> to add the first one.</p>`;
     return;
   }
-  host.innerHTML = state.entries.map(e => {
-    const r = REACTION_BY_VALUE[e.initial_reaction];
-    const isNew = e.id === state.lastAddedId;
-    return `
-      <div class="entry${isNew ? ' just-added' : ''}" data-id="${e.id}">
-        <div class="react-emojis" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</div>
-        <div class="body">
-          <div class="food">${escapeHtml(e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name }))}</div>
-          <div class="when">${fmtWhen(e.fed_at)}</div>
-          ${e.notes ? `<div class="note">${escapeHtml(e.notes)}</div>` : ''}
-          ${byline(e)}
-        </div>
-        <div class="row-actions">
-          <button class="icon-btn" data-act="edit" title="Edit">✎</button>
-          <button class="icon-btn" data-act="del" title="Delete">🗑</button>
-        </div>
-      </div>`;
-  }).join('');
+  const w = insights.WINDOWS.find(x => x.value === state.historyWindow);
+  const shown = insights.inWindow(state.entries, state.historyWindow);
+  const hidden = state.entries.length - shown.length;
+  host.innerHTML = (shown.length
+      ? shown.map(entryRowHtml).join('')
+      : `<p class="empty">No feedings in the last ${w.label.toLowerCase()}.</p>`) +
+    (hidden > 0
+      ? `<button type="button" class="ghost-btn see-all" id="fullHistoryBtn">View full history (${state.entries.length}) →</button>`
+      : '');
 
   state.lastAddedId = null; // one-shot: only animate once
+  wireEntryRows(host);
+  $('#fullHistoryBtn')?.addEventListener('click', openFullHistory);
+}
 
+function openFullHistory() {
+  openModal(`
+    <div class="modal-head">
+      <h2>Full history</h2>
+      <button type="button" class="icon-btn close-x" id="m_close" title="Close">✕</button>
+    </div>
+    <p class="muted">All ${state.entries.length} feedings, newest first.</p>
+    <div class="history-list" id="fullHistoryList">${state.entries.map(entryRowHtml).join('')}</div>`);
+  $('#m_close').addEventListener('click', closeModal);
+  // Deleting from here refreshes the pop-up in place.
+  wireEntryRows($('#fullHistoryList'), () => { if (state.entries.length) openFullHistory(); else closeModal(); });
+}
+
+function entryRowHtml(e) {
+  const r = REACTION_BY_VALUE[e.initial_reaction];
+  const isNew = e.id === state.lastAddedId;
+  return `
+    <div class="entry${isNew ? ' just-added' : ''}" data-id="${e.id}">
+      <div class="react-emojis" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</div>
+      <div class="body">
+        <div class="food">${escapeHtml(e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name }))}</div>
+        <div class="when">${fmtWhen(e.fed_at)}</div>
+        ${e.notes ? `<div class="note">${escapeHtml(e.notes)}</div>` : ''}
+        ${byline(e)}
+      </div>
+      <div class="row-actions">
+        <button class="icon-btn" data-act="edit" title="Edit">✎</button>
+        <button class="icon-btn" data-act="del" title="Delete">🗑</button>
+      </div>
+    </div>`;
+}
+
+function wireEntryRows(host, afterDelete) {
   $$('.entry', host).forEach(row => {
     const id = row.dataset.id;
-    $('[data-act="del"]', row).addEventListener('click', () => deleteEntry(id));
+    $('[data-act="del"]', row).addEventListener('click', async () => {
+      if (await deleteEntry(id)) afterDelete?.();
+    });
     $('[data-act="edit"]', row).addEventListener('click', () => openEditEntryModal(id));
   });
 }
 
 async function deleteEntry(id) {
   const entry = state.entries.find(e => e.id === id);
-  if (!confirm(`Delete this feeding (${entry?.food_label || 'entry'})?`)) return;
+  if (!confirm(`Delete this feeding (${entry?.food_label || 'entry'})?`)) return false;
   await store.deleteEntry(id);
   state.entries = await store.getEntries(state.activePetId);
   renderHistory();
   renderInsights();
+  return true;
 }
 
 // ── Insights ─────────────────────────────────────────────────────────────────
