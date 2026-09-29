@@ -1,21 +1,31 @@
 // Static reference data: reaction scale + the starter food catalog.
 // Custom foods entered by users are stored separately (see store.js).
 
-// Reaction scale, shared by both "initial" and "long-term" reactions.
-// `score` powers KPIs/trends on a 1–5 scale (higher = she liked it more).
-// Entries store the `value` word, not the number, so the scale can change freely.
+// Rating scale. Entries store the NUMBER in `entries.rating`
+// (1 = Refused, 2 = Nibbled, 3 = Liked it); this table is the lookup to the
+// words/emoji shown in the app. Higher = she liked it more.
 export const REACTIONS = [
-  { value: 'loved',    label: 'Loved it',  emoji: '😻', score: 5, hint: 'Devoured it, wanted more' },
-  { value: 'ate',      label: 'Ate it',    emoji: '🙂', score: 4, hint: 'Finished, no fuss' },
-  { value: 'picky',    label: 'Picky',     emoji: '😐', score: 3, hint: 'Ate some, left the rest' },
-  { value: 'nibbled',  label: 'Nibbled',   emoji: '😾', score: 2, hint: 'A bite or two, then done' },
-  { value: 'refused',  label: 'Refused',   emoji: '🙅', score: 1, hint: 'Walked away, ate nothing' },
-];
+  { value: 3, label: 'Liked it', emoji: '😻', hint: 'Ate it happily' },
+  { value: 2, label: 'Nibbled',  emoji: '😐', hint: 'Ate some, left the rest' },
+  { value: 1, label: 'Refused',  emoji: '🙅', hint: 'Walked away, ate nothing' },
+].map(r => ({ ...r, score: r.value }));
 
 export const SCORE_MIN = 1;
-export const SCORE_MAX = 5;
+export const SCORE_MAX = 3;
 
 export const REACTION_BY_VALUE = Object.fromEntries(REACTIONS.map(r => [r.value, r]));
+
+// Legacy word ratings (before Sep 2026) → number. The database converts these
+// too (trigger on entries); this covers local-mode data and old JSON imports.
+export const LEGACY_RATING = { loved: 3, ate: 3, picky: 2, nibbled: 2, refused: 1 };
+
+// The entry's rating as a number 1–3, or null if unrated.
+export function ratingOf(entry) {
+  if (!entry) return null;
+  const n = Number(entry.rating);
+  if (n >= SCORE_MIN && n <= SCORE_MAX) return n;
+  return LEGACY_RATING[entry.initial_reaction] ?? null;
+}
 
 export function reactionScore(value) {
   const r = REACTION_BY_VALUE[value];

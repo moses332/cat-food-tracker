@@ -53,15 +53,16 @@ test, then **restore the keys before committing**. Verify `git status` shows con
   (cropped/shrunk to 320 px in the browser by `squarePhoto()`; ~5–30 KB), shown large in the header logo spot (`#brandAvatar`) + Pets tab
 - `foods` (id, brand, name, created_at) — user-added custom foods; starters live in `data.js`
 - `entries` (id, pet_id, food_brand, food_name, food_label, **initial_reaction**, longterm_reaction,
-  fed_at, notes, created_at, **created_by, created_by_name, edited_by_name, edited_at**)
+  **rating**, fed_at, notes, created_at, **created_by, created_by_name, edited_by_name, edited_at**)
 - `barcodes` (id, code UNIQUE, food_brand, food_name, food_label) — teach-once UPC→food map
 
 Notes:
-- Ratings are stored as words (`loved`/`ate`/`picky`/`nibbled`/`refused`); the **1–5** numeric
-  scale lives only in `REACTIONS` in `js/data.js` (`SCORE_MIN`/`SCORE_MAX`), so it can change without
-  touching data.
-- There is **one rating per feeding**, stored in the legacy `initial_reaction` column
-  (`longterm_reaction` is unused; kept for back-compat). Don't reintroduce a second rating.
+- **Rating = `entries.rating` smallint: 1 Refused · 2 Nibbled · 3 Liked it.** Labels/emoji live in
+  `REACTIONS` in `js/data.js` (`SCORE_MIN`/`SCORE_MAX`); always read via `ratingOf(entry)`.
+  `initial_reaction` is the LEGACY word column (loved/ate/picky/nibbled/refused, pre-2026-09-28);
+  new code writes `null` there. Trigger `entries_fill_rating` converts a word-only insert/update
+  into `rating` (old cached app copies, old JSON imports). Backup: `backup.entries_before_rating3`.
+  "Accepted" = rating ≥ 2. One rating per feeding; `longterm_reaction` is unused.
 - `created_by_name` / `edited_by_name` power the "by X · edited by Y" byline in History.
 
 ## Food naming convention
@@ -100,7 +101,7 @@ Logic lives in `js/insights.js`:
 - `preferenceBoard` ranks by average rating shrunk toward her overall average (`PRIOR_WEIGHT` = 2
   phantom feedings) so one-off ratings don't dominate; displays the plain average.
 - `suggestions` = foods fed before, not in the last 2 days, scored by recency-weighted rating
-  (30-day half-life, shrunk toward overall avg) + up to +0.3 variety bonus for 14+ days since fed.
+  (30-day half-life, shrunk toward overall avg) + variety bonus up to 7.5% of the rating range (0.15) for 14+ days since fed.
   Tapping one calls `openEntryModal({ food: { brand, name } })` to preselect it.
 - Favorites / Most-fed rows (inline and in "See all") open `openFoodDetail(label)`: stats + last 10
   feedings of that food + "Log this food".

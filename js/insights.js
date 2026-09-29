@@ -1,20 +1,19 @@
 // Pure functions that turn a list of feeding entries into KPIs and trends.
 // Kept separate from the UI so it's easy to reason about and tweak.
 
-import { REACTION_BY_VALUE, reactionScore, foodLabel, SCORE_MIN, SCORE_MAX } from './data.js';
+import { REACTION_BY_VALUE, foodLabel, ratingOf, SCORE_MIN, SCORE_MAX } from './data.js';
 
-// "Acceptance" = did she actually eat it? We treat picky-or-better as accepted.
-const ACCEPTED = new Set(['loved', 'ate', 'picky']);
-export function isAccepted(reactionValue) {
-  return ACCEPTED.has(reactionValue);
+// "Acceptance" = did she actually eat any of it? Nibbled or Liked counts.
+export function isAccepted(rating) {
+  return rating != null && rating >= 2;
 }
 
 export function summarize(entries) {
   const total = entries.length;
-  const withInitial = entries.filter(e => e.initial_reaction);
-  const accepted = withInitial.filter(e => isAccepted(e.initial_reaction)).length;
+  const withInitial = entries.filter(e => ratingOf(e) != null);
+  const accepted = withInitial.filter(e => isAccepted(ratingOf(e))).length;
 
-  const avgInitial = avg(withInitial.map(e => reactionScore(e.initial_reaction)));
+  const avgInitial = avg(withInitial.map(ratingOf));
 
   return {
     total,
@@ -38,7 +37,7 @@ export function perFood(entries) {
 
   const rows = [];
   for (const [label, list] of groups) {
-    const ratings = list.map(e => reactionScore(e.initial_reaction)).filter(n => n != null);
+    const ratings = list.map(ratingOf).filter(n => n != null);
     rows.push({
       label,
       brand: list[0].food_brand,
@@ -47,7 +46,7 @@ export function perFood(entries) {
       rated: ratings.length,
       lastFed: list.reduce((m, e) => (e.fed_at > m ? e.fed_at : m), ''),
       avgInitial: avg(ratings),
-      acceptance: rate(list.map(e => e.initial_reaction)),
+      acceptance: rate(list.map(ratingOf)),
     });
   }
   return rows.sort((a, b) => (b.avgInitial ?? -1) - (a.avgInitial ?? -1));
@@ -74,7 +73,7 @@ export function inWindow(entries, windowValue, now = Date.now()) {
 // food she's loved ten times. The displayed number is still the plain average.
 const PRIOR_WEIGHT = 2;
 export function preferenceBoard(entries) {
-  const overall = avg(entries.map(e => reactionScore(e.initial_reaction)).filter(n => n != null)) ?? MID;
+  const overall = avg(entries.map(ratingOf).filter(n => n != null)) ?? MID;
   return perFood(entries)
     .filter(f => f.avgInitial != null)
     .map(f => ({ ...f, rank: (f.avgInitial * f.rated + overall * PRIOR_WEIGHT) / (f.rated + PRIOR_WEIGHT) }))
@@ -96,9 +95,10 @@ export function frequencyBoard(entries) {
 //             blended with her overall average (1 feeding's worth)
 //   variety = up to +0.3 for 14+ days since she last had it
 export function suggestions(entries, { now = Date.now(), skipDays = 2, limit = 10 } = {}) {
-  const HALF_LIFE = 30, VARIETY_MAX = 0.3, VARIETY_DAYS = 14;
-  const rated = entries.filter(e => reactionScore(e.initial_reaction) != null);
-  const overall = avg(rated.map(e => reactionScore(e.initial_reaction))) ?? MID;
+  // Variety bonus is 7.5% of the rating range (0.15 on the 1–3 scale).
+  const HALF_LIFE = 30, VARIETY_MAX = 0.075 * (SCORE_MAX - SCORE_MIN), VARIETY_DAYS = 14;
+  const rated = entries.filter(e => ratingOf(e) != null);
+  const overall = avg(rated.map(ratingOf)) ?? MID;
 
   const foods = new Map();
   for (const e of entries) {
@@ -107,7 +107,7 @@ export function suggestions(entries, { now = Date.now(), skipDays = 2, limit = 1
     const t = new Date(e.fed_at).getTime();
     f.count++;
     if (t > f.last) f.last = t;
-    const r = reactionScore(e.initial_reaction);
+    const r = ratingOf(e);
     if (r != null) {
       const w = Math.pow(0.5, Math.max(0, now - t) / DAY / HALF_LIFE);
       f.wSum += w;
@@ -130,14 +130,14 @@ export function suggestions(entries, { now = Date.now(), skipDays = 2, limit = 1
 }
 
 // Counts of each reaction value, for a breakdown bar.
-export function reactionBreakdown(entries, field = 'initial_reaction') {
+export function reactionBreakdown(entries) {
   const counts = {};
   for (const e of entries) {
-    const v = e[field];
+    const v = ratingOf(e);
     if (v) counts[v] = (counts[v] || 0) + 1;
   }
   return Object.entries(counts)
-    .map(([value, count]) => ({ value, count, meta: REACTION_BY_VALUE[value] }))
+    .map(([value, count]) => ({ value: Number(value), count, meta: REACTION_BY_VALUE[value] }))
     .sort((a, b) => (b.meta?.score ?? 0) - (a.meta?.score ?? 0));
 }
 
@@ -145,12 +145,12 @@ export function reactionBreakdown(entries, field = 'initial_reaction') {
 export function acceptanceTrend(entries) {
   const byWeek = new Map();
   for (const e of entries) {
-    if (!e.initial_reaction) continue;
+    if (ratingOf(e) == null) continue;
     const wk = weekStart(new Date(e.fed_at));
     if (!byWeek.has(wk)) byWeek.set(wk, { total: 0, accepted: 0 });
     const b = byWeek.get(wk);
     b.total++;
-    if (isAccepted(e.initial_reaction)) b.accepted++;
+    if (isAccepted(ratingOf(e))) b.accepted++;
   }
   return [...byWeek.entries()]
     .sort((a, b) => new Date(a[0]) - new Date(b[0]))
@@ -167,8 +167,8 @@ function avg(nums) {
   if (!nums.length) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
-function rate(reactionValues) {
-  const valid = reactionValues.filter(Boolean);
+function rate(ratings) {
+  const valid = ratings.filter(n => n != null);
   if (!valid.length) return null;
   return valid.filter(isAccepted).length / valid.length;
 }

@@ -2,7 +2,7 @@
 // `store`, all number-crunching through `insights`.
 
 import { store, initStore, getFoodCatalog, syncMode } from './store.js';
-import { REACTIONS, REACTION_BY_VALUE, foodLabel, SCORE_MAX } from './data.js';
+import { REACTIONS, REACTION_BY_VALUE, foodLabel, ratingOf, SCORE_MAX } from './data.js';
 import * as insights from './insights.js';
 import { startScan, stopScan } from './scanner.js';
 import {
@@ -310,7 +310,7 @@ async function submitEntry(e) {
   e.preventDefault();
   const food = entryPicker?.get();
   if (!food) { toast('Pick a food.', true); return; }
-  const reaction = $('input[name="reaction"]:checked')?.value || null;
+  const reaction = Number($('input[name="reaction"]:checked')?.value) || null;
   if (!reaction) { toast('Pick a reaction.', true); return; }
 
   const row = await store.addEntry({
@@ -318,7 +318,8 @@ async function submitEntry(e) {
     food_brand: food.brand || '',
     food_name: food.name,
     food_label: foodLabel(food),
-    initial_reaction: reaction,   // single rating (column kept for back-compat)
+    rating: reaction,             // 1 Refused · 2 Nibbled · 3 Liked (see REACTIONS)
+    initial_reaction: null,       // legacy word column, no longer written
     longterm_reaction: null,
     fed_at: fromLocalInput($('#fedAt').value).toISOString(),
     notes: $('#notes').value.trim(),
@@ -464,7 +465,7 @@ function foodStats() {
     const key = foodKey(normalizeFood({ brand: e.food_brand, name: e.food_name }));
     const s = map.get(key) || { count: 0, total: 0, rated: 0 };
     s.count++;
-    const r = REACTION_BY_VALUE[e.initial_reaction];
+    const r = REACTION_BY_VALUE[ratingOf(e)];
     if (r) { s.total += r.score; s.rated++; }
     map.set(key, s);
   }
@@ -625,7 +626,7 @@ function fmtDay(d, short = false) {
 }
 
 function entryRowHtml(e) {
-  const r = REACTION_BY_VALUE[e.initial_reaction];
+  const r = REACTION_BY_VALUE[ratingOf(e)];
   const isNew = e.id === state.lastAddedId;
   return `
     <div class="entry${isNew ? ' just-added' : ''}" data-id="${e.id}">
@@ -682,7 +683,7 @@ function renderInsights() {
   ].join('');
 
   // Reaction breakdown (initial)
-  const breakdown = insights.reactionBreakdown(e, 'initial_reaction');
+  const breakdown = insights.reactionBreakdown(e);
   const maxB = Math.max(1, ...breakdown.map(b => b.count));
   $('#breakdownChart').innerHTML = breakdown.length
     ? breakdown.map(b => barRow(
@@ -784,9 +785,9 @@ function openFoodDetail(label) {
   if (!all.length) return;
   const first = all[0];
   const food = normalizeFood({ brand: first.food_brand, name: first.food_name });
-  const rated = all.map(e => REACTION_BY_VALUE[e.initial_reaction]).filter(Boolean);
+  const rated = all.map(e => REACTION_BY_VALUE[ratingOf(e)]).filter(Boolean);
   const avg = rated.length ? rated.reduce((a, r) => a + r.score, 0) / rated.length : null;
-  const accepted = all.filter(e => insights.isAccepted(e.initial_reaction)).length;
+  const accepted = all.filter(e => insights.isAccepted(ratingOf(e))).length;
   const recent = all.slice(0, 10); // entries are newest-first
 
   openModal(`
@@ -804,7 +805,7 @@ function openFoodDetail(label) {
     <h3 class="detail-sub">${all.length > 10 ? 'Last 10 feedings' : 'Every feeding'}</h3>
     <div class="detail-list">
       ${recent.map(e => {
-        const r = REACTION_BY_VALUE[e.initial_reaction];
+        const r = REACTION_BY_VALUE[ratingOf(e)];
         return `<div class="detail-row">
           <span class="dr-emoji" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</span>
           <div class="dr-body">
@@ -1308,11 +1309,12 @@ function openEditEntryModal(id) {
       <button class="primary-btn" id="m_save">Save changes</button>
       <button class="ghost-btn" id="m_cancel">Cancel</button>
     </div>`);
-  buildReactionGrid('#e_reactions', 'e_reaction', e.initial_reaction);
+  buildReactionGrid('#e_reactions', 'e_reaction', ratingOf(e));
   $('#m_cancel').addEventListener('click', closeModal);
   $('#m_save').addEventListener('click', async () => {
     await store.updateEntry(id, {
-      initial_reaction: $('input[name="e_reaction"]:checked')?.value || null,
+      rating: Number($('input[name="e_reaction"]:checked')?.value) || null,
+      initial_reaction: null, // legacy column; clear so it can't contradict `rating`
       fed_at: fromLocalInput($('#e_fedAt').value).toISOString(),
       notes: $('#e_notes').value.trim(),
       edited_by_name: state.user ? userName(state.user) : null,
