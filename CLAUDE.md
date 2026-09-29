@@ -80,7 +80,11 @@ brand/line/flavor to pre-fill the form. The function checks sign-in itself, so i
 ## History tab
 Shows a moving window (`state.historyWindow`, default `week`, same `inWindow` / `renderWindowSeg`
 as Insights) plus a "View full history" pop-up (`openFullHistory`). Rows come from `entryRowHtml`
-/ `wireEntryRows`, shared by both.
+/ `wireEntryRows`, shared by both. Entries are grouped by local day (`dayGroupsHtml`); each day
+expects a morning (< noon) and evening (≥ noon) feeding. A missing one shows a "＋ Log it" prompt
+(`SLOTS`: opens New feeding at 7 am / 5 pm; today's slots only flag after 10 am / 8 pm). Runs of
+2+ empty days collapse to one line; nothing before the first-ever feeding is flagged.
+`openEntryModal({ food, fedAt })` takes optional preselects.
 
 ## Tab swipe
 `wireSwipe()` in app.js: horizontal swipe on the main screen moves through `TAB_ORDER`

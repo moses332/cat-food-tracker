@@ -237,8 +237,10 @@ function wireHistoryTab() {
   });
 }
 
-// `preselect` (optional): a { brand, name } food to start with, e.g. from a suggestion.
-async function openEntryModal(preselect) {
+// Options (all optional):
+//   food:  { brand, name } to preselect, e.g. from a suggestion
+//   fedAt: Date to prefill, e.g. from a "missed feeding" prompt
+async function openEntryModal({ food: preselect, fedAt } = {}) {
   if (!state.activePetId) {
     toast('Add a pet first (🐾 Pets tab).', true);
     return;
@@ -277,11 +279,11 @@ async function openEntryModal(preselect) {
   entryPicker = mountFoodPicker($('#foodPicker'), {
     onAddNew: (query) => openAddFoodModal(query),
   });
+  $('#fedAt').value = toLocalInput(fedAt || new Date());
   if (preselect?.name) {
     const food = await ensureFood(normalizeFood(preselect));
     entryPicker?.select(food);
   }
-  $('#fedAt').value = toLocalInput(new Date());
 
   $('#entryClose').addEventListener('click', closeEntryModal);
   $('#scanBtn').addEventListener('click', openScanModal);
@@ -495,8 +497,17 @@ function toast(text, isError = false) {
 }
 
 // ── History ──────────────────────────────────────────────────────────────────
-// History shows a moving window (default: last week); "View full history"
-// opens everything in a pop-up.
+// ── History: grouped by day, with missed-feeding prompts ────────────────────
+// Shows a moving window (default: last week); "View full history" opens
+// everything in a pop-up. Each day expects a morning (before noon) and an
+// evening (noon on) feeding; a missing one gets a "＋ Log it" prompt that
+// opens New feeding at 7 am / 5 pm that day.
+const SLOTS = {
+  morning: { label: 'morning', emoji: '☀️', hour: 7,  dueHour: 10 }, // flag today after 10 am
+  evening: { label: 'evening', emoji: '🌙', hour: 17, dueHour: 20 }, // flag today after 8 pm
+};
+const NOON = 12;
+
 function renderHistory() {
   renderWindowSeg('#historyWindow', 'historyWindow', renderHistory);
   const host = $('#historyList');
@@ -505,11 +516,12 @@ function renderHistory() {
     return;
   }
   const w = insights.WINDOWS.find(x => x.value === state.historyWindow);
-  const shown = insights.inWindow(state.entries, state.historyWindow);
+  // Day-aligned window: today plus the previous (days − 1) calendar days.
+  const fromDay = w.days == null ? null : addDays(startOfDay(new Date()), -(w.days - 1));
+  const shown = fromDay ? state.entries.filter(e => new Date(e.fed_at) >= fromDay) : state.entries;
   const hidden = state.entries.length - shown.length;
-  host.innerHTML = (shown.length
-      ? shown.map(entryRowHtml).join('')
-      : `<p class="empty">No feedings in the last ${w.label.toLowerCase()}.</p>`) +
+
+  host.innerHTML = dayGroupsHtml(shown, fromDay) +
     (hidden > 0
       ? `<button type="button" class="ghost-btn see-all" id="fullHistoryBtn">View full history (${state.entries.length}) →</button>`
       : '');
@@ -526,10 +538,83 @@ function openFullHistory() {
       <button type="button" class="icon-btn close-x" id="m_close" title="Close">✕</button>
     </div>
     <p class="muted">All ${state.entries.length} feedings, newest first.</p>
-    <div class="history-list" id="fullHistoryList">${state.entries.map(entryRowHtml).join('')}</div>`);
+    <div class="history-list" id="fullHistoryList">${dayGroupsHtml(state.entries, null)}</div>`);
   $('#m_close').addEventListener('click', closeModal);
   // Deleting from here refreshes the pop-up in place.
   wireEntryRows($('#fullHistoryList'), () => { if (state.entries.length) openFullHistory(); else closeModal(); });
+}
+
+// Entries (newest first) → day sections from today back to `fromDay` (or the
+// first-ever feeding, whichever is later). Runs of 2+ days with nothing
+// logged collapse into one line.
+function dayGroupsHtml(entries, fromDay) {
+  const byDay = new Map();
+  for (const e of entries) {
+    const k = dayKey(new Date(e.fed_at));
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k).push(e);
+  }
+  const firstEver = state.entries.length
+    ? startOfDay(new Date(state.entries[state.entries.length - 1].fed_at)) : startOfDay(new Date());
+  const stop = fromDay && fromDay > firstEver ? fromDay : firstEver;
+  const now = new Date();
+
+  const out = [];
+  let emptyRun = []; // consecutive days with nothing logged
+  const flushEmpty = () => {
+    if (emptyRun.length === 1) out.push(dayHtml(emptyRun[0], [], now));
+    else if (emptyRun.length > 1) {
+      const newest = emptyRun[0], oldest = emptyRun[emptyRun.length - 1];
+      out.push(`<div class="day-gap">📭 Nothing logged ${fmtDay(oldest, true)} – ${fmtDay(newest, true)} (${emptyRun.length} days)</div>`);
+    }
+    emptyRun = [];
+  };
+
+  for (let d = startOfDay(now); d >= stop; d = addDays(d, -1)) {
+    const list = byDay.get(dayKey(d)) || [];
+    if (!list.length && dayKey(d) !== dayKey(now)) { emptyRun.push(d); continue; }
+    flushEmpty();
+    out.push(dayHtml(d, list, now));
+  }
+  flushEmpty();
+  return out.join('');
+}
+
+function dayHtml(day, list, now) {
+  const has = (slot) => list.some(e => (new Date(e.fed_at).getHours() < NOON) === (slot === 'morning'));
+  const due = (slot) => dayKey(day) !== dayKey(now) || now.getHours() >= SLOTS[slot].dueHour;
+  const missing = (slot) => !has(slot) && due(slot);
+  // Newest first: evening prompt on top, morning prompt at the bottom.
+  const evening = list.filter(e => new Date(e.fed_at).getHours() >= NOON);
+  const morning = list.filter(e => new Date(e.fed_at).getHours() < NOON);
+  const count = list.length ? `${list.length} feeding${list.length === 1 ? '' : 's'}` : '';
+  return `
+    <section class="day">
+      <div class="day-head"><span>${fmtDay(day)}</span><span class="day-count">${count}</span></div>
+      ${missing('evening') ? missedHtml(day, 'evening') : ''}
+      ${evening.map(entryRowHtml).join('')}
+      ${morning.map(entryRowHtml).join('')}
+      ${missing('morning') ? missedHtml(day, 'morning') : ''}
+    </section>`;
+}
+
+function missedHtml(day, slot) {
+  const s = SLOTS[slot];
+  return `<button type="button" class="missed" data-missed="${slot}" data-day="${day.getTime()}">
+      <span>${s.emoji} No ${s.label} feeding logged</span><span class="missed-go">＋ Log it</span>
+    </button>`;
+}
+
+function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function dayKey(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function fmtDay(d, short = false) {
+  const today = startOfDay(new Date());
+  if (!short && dayKey(d) === dayKey(today)) return 'Today';
+  if (!short && dayKey(d) === dayKey(addDays(today, -1))) return 'Yesterday';
+  return d.toLocaleDateString(undefined, short
+    ? { month: 'short', day: 'numeric' }
+    : { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function entryRowHtml(e) {
@@ -540,7 +625,7 @@ function entryRowHtml(e) {
       <div class="react-emojis" title="${r ? r.label : ''}">${r ? r.emoji : '·'}</div>
       <div class="body">
         <div class="food">${escapeHtml(e.food_label || foodLabel({ brand: e.food_brand, name: e.food_name }))}</div>
-        <div class="when">${fmtWhen(e.fed_at)}</div>
+        <div class="when">${fmtTime(e.fed_at)}</div>
         ${e.notes ? `<div class="note">${escapeHtml(e.notes)}</div>` : ''}
         ${byline(e)}
       </div>
@@ -552,6 +637,12 @@ function entryRowHtml(e) {
 }
 
 function wireEntryRows(host, afterDelete) {
+  $$('.missed', host).forEach(btn => btn.addEventListener('click', () => {
+    const at = new Date(Number(btn.dataset.day));
+    at.setHours(SLOTS[btn.dataset.missed].hour, 0, 0, 0);
+    closeModal(); // in case we're inside the full-history pop-up
+    openEntryModal({ fedAt: at });
+  }));
   $$('.entry', host).forEach(row => {
     const id = row.dataset.id;
     $('[data-act="del"]', row).addEventListener('click', async () => {
@@ -629,7 +720,7 @@ function renderSuggestions() {
   }).join('');
   $$('.suggest-row', host).forEach(btn => btn.addEventListener('click', () => {
     const s = list[Number(btn.dataset.i)];
-    openEntryModal({ brand: s.brand, name: s.name });
+    openEntryModal({ food: { brand: s.brand, name: s.name } });
   }));
 }
 
@@ -1248,6 +1339,9 @@ function fromLocalInput(v) { return new Date(v); }
 function fmtWhen(iso) {
   const d = new Date(iso);
   return d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 function fmtRelative(iso) {
   const diff = Date.now() - new Date(iso).getTime();

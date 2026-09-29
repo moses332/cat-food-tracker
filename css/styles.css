@@ -586,3 +586,24 @@ code {
 /* ── History window ── */
 .history-window { margin: -4px 0 12px; }
 #fullHistoryList { margin-top: 8px; }
+
+/* ── History: day groups + missed feedings ── */
+.day { display: flex; flex-direction: column; gap: 8px; }
+.day-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; font-weight: 700; color: var(--ink);
+  padding: 2px 2px 0;
+}
+.day-count { font-size: 12px; font-weight: 500; color: var(--muted); }
+.missed {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 12px;
+  border: 1.5px dashed #e8c48d; border-radius: 12px; background: #fff8ec;
+  font: inherit; font-size: 13px; color: #8a5a14; text-align: left; cursor: pointer;
+}
+.missed:active { background: #ffefd4; }
+.missed-go { font-weight: 700; white-space: nowrap; }
+.day-gap {
+  padding: 10px 12px; border-radius: 12px; background: var(--bg);
+  font-size: 13px; color: var(--muted); text-align: center;
+}
