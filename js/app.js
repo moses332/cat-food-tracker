@@ -88,17 +88,15 @@ function renderPetSwitcher() {
   const wrap = $('#petSwitcherWrap');
   if (!state.pets.length) {
     wrap.textContent = 'No pets yet — add one in 🐾';
+    $('#brandAvatar').textContent = '🐱';
     return;
   }
   wrap.innerHTML = '';
+  // The active pet's photo takes the logo spot, left of the title + name.
   const active = state.pets.find(p => p.id === state.activePetId);
-  if (active?.photo) {
-    const img = document.createElement('img');
-    img.className = 'pet-photo header-photo';
-    img.src = active.photo;
-    img.alt = active.name;
-    wrap.appendChild(img);
-  }
+  $('#brandAvatar').innerHTML = active?.photo
+    ? `<img class="pet-photo header-photo" src="${escapeAttr(active.photo)}" alt="${escapeAttr(active.name)}" />`
+    : '🐱';
   const sel = document.createElement('select');
   sel.id = 'petSwitcher';
   for (const p of state.pets) {

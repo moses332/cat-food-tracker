@@ -611,7 +611,8 @@ code {
 /* ── Pet photos ── */
 .pet-photo { border-radius: 50%; object-fit: cover; display: block; }
 #petSwitcherWrap { display: flex; align-items: center; gap: 7px; }
-.header-photo { width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.75); flex-shrink: 0; }
+.header-photo { width: 56px; height: 56px; border: 2.5px solid rgba(255,255,255,0.85); box-shadow: 0 2px 8px rgba(30,20,60,0.25); }
+#brandAvatar { flex-shrink: 0; line-height: 1; }
 .avatar-photo { width: 40px; height: 40px; flex-shrink: 0; }
 .photo-row { display: flex; align-items: center; gap: 14px; }
 .photo-preview .pet-photo, .photo-empty {
