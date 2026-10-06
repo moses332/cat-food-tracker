@@ -306,26 +306,37 @@ function closeEntryModal() {
   $('#entryBox').innerHTML = '';
 }
 
+let savingEntry = false; // blocks a double-tap on "Save feeding"
 async function submitEntry(e) {
   e.preventDefault();
+  if (savingEntry) return;
   const food = entryPicker?.get();
   if (!food) { toast('Pick a food.', true); return; }
   const reaction = Number($('input[name="reaction"]:checked')?.value) || null;
   if (!reaction) { toast('Pick a reaction.', true); return; }
 
-  const row = await store.addEntry({
-    pet_id: state.activePetId,
-    food_brand: food.brand || '',
-    food_name: food.name,
-    food_label: foodLabel(food),
-    rating: reaction,             // 1 Refused · 2 Nibbled · 3 Liked (see REACTIONS)
-    initial_reaction: null,       // legacy word column, no longer written
-    longterm_reaction: null,
-    fed_at: fromLocalInput($('#fedAt').value).toISOString(),
-    notes: $('#notes').value.trim(),
-    created_by: state.user?.id ?? null,
-    created_by_name: state.user ? userName(state.user) : null,
-  });
+  savingEntry = true;
+  const btn = $('#entryForm button[type=submit]');
+  if (btn) btn.disabled = true;
+  let row;
+  try {
+    row = await store.addEntry({
+      pet_id: state.activePetId,
+      food_brand: food.brand || '',
+      food_name: food.name,
+      food_label: foodLabel(food),
+      rating: reaction,             // 1 Refused · 2 Nibbled · 3 Liked (see REACTIONS)
+      initial_reaction: null,       // legacy word column, no longer written
+      longterm_reaction: null,
+      fed_at: fromLocalInput($('#fedAt').value).toISOString(),
+      notes: $('#notes').value.trim(),
+      created_by: state.user?.id ?? null,
+      created_by_name: state.user ? userName(state.user) : null,
+    });
+  } finally {
+    savingEntry = false;
+    if (btn?.isConnected) btn.disabled = false;
+  }
 
   closeEntryModal();
   state.lastAddedId = row?.id ?? null;
@@ -488,6 +499,18 @@ function recentFoods(n) {
     if (out.length >= n) break;
   }
   return out;
+}
+
+// Run an async click handler at most once at a time: the button is disabled
+// until it finishes, so a double-tap can't save the same thing twice.
+function guardClick(btn, handler) {
+  btn.addEventListener('click', async (ev) => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try { await handler(ev); }
+    catch (err) { console.error(err); toast('Something went wrong — please try again.', true); }
+    finally { if (btn.isConnected) btn.disabled = false; }
+  });
 }
 
 // Lightweight transient toast (replaces the old inline form message).
@@ -1043,7 +1066,7 @@ function openAddFoodModal(query = '') {
     </div>`);
   wireFoodFields('m');
   $('#m_cancel').addEventListener('click', closeModal);
-  $('#m_save').addEventListener('click', async () => {
+  guardClick($('#m_save'), async () => {
     const food = readFoodFields('m');
     if (!food) { $('#m_flavor').focus(); return; }
     const hit = await ensureFood(food);
@@ -1164,7 +1187,7 @@ function openLinkBarcodeModal(code) {
   });
 
   $('#lb_cancel').addEventListener('click', closeModal);
-  $('#lb_save').addEventListener('click', async () => {
+  guardClick($('#lb_save'), async () => {
     const food = readFoodFields('lb');
     if (!food) { $('#lb_flavor').focus(); return; }
     const hit = await ensureFood(food);
@@ -1273,7 +1296,7 @@ function openPetModal(id) {
   $('#m_photoRemove').addEventListener('click', () => { photo = null; showPhoto(); });
 
   $('#m_cancel').addEventListener('click', closeModal);
-  $('#m_save').addEventListener('click', async () => {
+  guardClick($('#m_save'), async () => {
     const name = $('#m_name').value.trim();
     if (!name) { $('#m_name').focus(); return; }
     const payload = {
@@ -1311,7 +1334,7 @@ function openEditEntryModal(id) {
     </div>`);
   buildReactionGrid('#e_reactions', 'e_reaction', ratingOf(e));
   $('#m_cancel').addEventListener('click', closeModal);
-  $('#m_save').addEventListener('click', async () => {
+  guardClick($('#m_save'), async () => {
     await store.updateEntry(id, {
       rating: Number($('input[name="e_reaction"]:checked')?.value) || null,
       initial_reaction: null, // legacy column; clear so it can't contradict `rating`

@@ -64,6 +64,8 @@ const localBackend = {
   },
   async addCustomFood(food) {
     const db = loadLocal();
+    const dup = db.foods.find(f => f.brand === food.brand && f.name === food.name);
+    if (dup) return dup;
     const row = { id: uid(), created_at: new Date().toISOString(), ...food };
     db.foods.push(row);
     saveLocal(db);
@@ -182,7 +184,12 @@ async function makeSupabaseBackend() {
       return must(await sb.from('foods').select('*'));
     },
     async addCustomFood(food) {
-      return must(await sb.from('foods').insert(food).select().single());
+      const res = await sb.from('foods').insert(food).select().single();
+      // Already there (unique brand+name) → just return the existing row.
+      if (res.error?.code === '23505') {
+        return must(await sb.from('foods').select('*').eq('brand', food.brand).eq('name', food.name).single());
+      }
+      return must(res);
     },
 
     async getBarcodes() {

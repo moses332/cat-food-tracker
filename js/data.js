@@ -62,7 +62,7 @@ export const STARTER_FOODS = [
   // Gravy Lovers
   { brand: 'Fancy Feast', name: 'Gravy Lovers — Chicken' },
   { brand: 'Fancy Feast', name: 'Gravy Lovers — Turkey' },
-  { brand: 'Fancy Feast', name: 'Gravy Lovers — Ocean Whitefish' },
+  { brand: 'Fancy Feast', name: 'Gravy Lovers — Ocean Whitefish & Tuna' },
   // Savory Centers / Medleys
   { brand: 'Fancy Feast', name: 'Savory Centers — Chicken Pâté' },
   { brand: 'Fancy Feast', name: 'Savory Centers — Salmon Pâté' },

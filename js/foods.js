@@ -179,6 +179,7 @@ function cleanFlavor(fl, line) {
   let f = squish(fl)
     .replace(/\s+and\s+/gi, ' & ')
     .replace(/\s*&\s*/g, ' & ')
+    .replace(/\bwhite\s+fish\b/gi, 'Whitefish')
     .replace(/^[\s,:;–—-]+|[\s,:;–—-]+$/g, '');
   if (GRAVY_LINES.has(line)) f = f.replace(/\s+in\s+gravy$/i, '');
   // Fancy Feast calls nearly everything "… Feast"; it's noise in a list.
