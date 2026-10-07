@@ -109,6 +109,16 @@ Logic lives in `js/insights.js`:
 ## Pop-ups
 `openModal(html)` auto-adds a ✕ (`.modal-x`) unless the content already has a `.close-x`.
 
+## Supabase MCP gotcha (for assistants)
+`apply_migration` / `execute_sql` statements that DELETE/TRUNCATE/DROP trigger a server-side
+confirmation; on surfaces that can't show it (e.g. the Android app) the call returns
+`{"status":"cancelled"}` even with "Always allow" set. Non-destructive SQL (CREATE, UPDATE,
+INSERT) runs fine. Split work so deletes are separate, and run deletes from desktop/web.
+**Pending cleanup (2026-10-06):** `foods` has 3 identical rows for
+"Medleys — Wild Salmon Primavera" (harmless; the catalog de-dupes). Once deleted, add
+`create unique index foods_brand_name_key on public.foods (brand, name);` — `addCustomFood`
+already handles the resulting 23505 by returning the existing row.
+
 ## Auth (shared mode)
 - **Passwordless email OTP, invite-only.** `store.sendCode(email)` (shouldCreateUser:false) →
   `store.verifyCode(email, token)`. Login gate lives in `app.js` (`showLoginGate` et al.).
